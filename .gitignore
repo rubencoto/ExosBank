@@ -1,0 +1,37 @@
+# Variables de entorno sensibles
+.env
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Dependencias PHP
+/vendor/
+
+# Dependencias Node.js
+node_modules/
+/ClientApp/node_modules/
+/ClientApp/dist/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# Caché
+cache/
+*.cache
+
+# Archivos de configuración locales
+appsettings.Development.json
+config.local.php
