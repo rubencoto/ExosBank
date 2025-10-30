@@ -10,10 +10,119 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { mockUsers, User } from '../../lib/mockData';
 import { Edit, Trash2, UserPlus } from 'lucide-react';
 
+interface NewUserForm {
+  nombre: string;
+  correo: string;
+  contrasena: string;
+  rol: string;
+  telefono: string;
+  cedula: string;
+  direccion: string;
+}
+
 export function UsersManagement() {
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isNewUserOpen, setIsNewUserOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [newUser, setNewUser] = useState<NewUserForm>({
+    nombre: '',
+    correo: '',
+    contrasena: '',
+    rol: '',
+    telefono: '',
+    cedula: '',
+    direccion: ''
+  });
+
+  const handleCreateUser = async () => {
+    // Validar campos antes de enviar
+    if (!newUser.nombre.trim()) {
+      setError('El nombre es obligatorio');
+      return;
+    }
+    if (!newUser.correo.trim()) {
+      setError('El correo es obligatorio');
+      return;
+    }
+    if (!newUser.contrasena) {
+      setError('La contraseña es obligatoria');
+      return;
+    }
+    if (!newUser.rol) {
+      setError('Debe seleccionar un rol');
+      return;
+    }
+    if (!newUser.telefono.trim()) {
+      setError('El teléfono es obligatorio');
+      return;
+    }
+    if (!newUser.cedula.trim()) {
+      setError('La cédula es obligatoria');
+      return;
+    }
+    if (!newUser.direccion.trim()) {
+      setError('La dirección es obligatoria');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('Enviando datos:', newUser); // Para debug
+      
+      const response = await fetch('http://localhost:80/ExosBank/api/usuarios/create.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newUser)
+      });
+
+      const data = await response.json();
+      console.log('Respuesta del servidor:', data); // Para debug
+
+      if (data.success) {
+        // Usuario creado exitosamente
+        alert('Usuario creado exitosamente');
+        
+        // Agregar el nuevo usuario a la lista
+        const nuevoUsuarioLocal: User = {
+          id: data.data.id_usuario,
+          name: data.data.nombre,
+          email: data.data.correo,
+          role: data.data.rol === 'Administrador' ? 'admin' : 'client',
+          status: 'active'
+        };
+        setUsers([...users, nuevoUsuarioLocal]);
+
+        // Limpiar el formulario y cerrar el modal
+        setNewUser({
+          nombre: '',
+          correo: '',
+          contrasena: '',
+          rol: '',
+          telefono: '',
+          cedula: '',
+          direccion: ''
+        });
+        setIsNewUserOpen(false);
+      } else {
+        setError(data.message);
+        alert('Error: ' + data.message);
+      }
+    } catch (err) {
+      const errorMsg = 'Error de conexión con el servidor';
+      setError(errorMsg);
+      console.error('Error completo:', err);
+      alert(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSaveUser = () => {
     if (editingUser) {
@@ -36,10 +145,135 @@ export function UsersManagement() {
           <h2>Gestión de Usuarios</h2>
           <p className="text-muted-foreground">Administra los usuarios del sistema</p>
         </div>
-        <Button className="bg-[#10b981] hover:bg-[#059669]">
-          <UserPlus className="h-4 w-4 mr-2" />
-          Nuevo Usuario
-        </Button>
+        <Dialog open={isNewUserOpen} onOpenChange={setIsNewUserOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-[#10b981] hover:bg-[#059669]">
+              <UserPlus className="h-4 w-4 mr-2" />
+              Nuevo Usuario
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+              <DialogDescription>
+                Complete la información del nuevo usuario para registrarlo en el sistema.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="nombre">Nombre completo *</Label>
+                  <Input
+                    id="nombre"
+                    placeholder="Juan Pérez Solís"
+                    value={newUser.nombre}
+                    onChange={(e) => setNewUser({ ...newUser, nombre: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="correo">Correo electrónico *</Label>
+                  <Input
+                    id="correo"
+                    type="email"
+                    placeholder="usuario@email.com"
+                    value={newUser.correo}
+                    onChange={(e) => setNewUser({ ...newUser, correo: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="contrasena">Contraseña *</Label>
+                  <Input
+                    id="contrasena"
+                    type="password"
+                    placeholder="••••••••"
+                    value={newUser.contrasena}
+                    onChange={(e) => setNewUser({ ...newUser, contrasena: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="rol">Rol *</Label>
+                  <Select
+                    value={newUser.rol}
+                    onValueChange={(value) => setNewUser({ ...newUser, rol: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione un rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cliente">Cliente</SelectItem>
+                      <SelectItem value="Administrador">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="telefono">Teléfono *</Label>
+                  <Input
+                    id="telefono"
+                    placeholder="+506 8234 5678"
+                    value={newUser.telefono}
+                    onChange={(e) => setNewUser({ ...newUser, telefono: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="cedula">Cédula *</Label>
+                  <Input
+                    id="cedula"
+                    placeholder="1-0000-0000"
+                    value={newUser.cedula}
+                    onChange={(e) => setNewUser({ ...newUser, cedula: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="direccion">Dirección *</Label>
+                <Input
+                  id="direccion"
+                  placeholder="Barrio Escalante, San José"
+                  value={newUser.direccion}
+                  onChange={(e) => setNewUser({ ...newUser, direccion: e.target.value })}
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleCreateUser} 
+                  disabled={isLoading}
+                  className="flex-1 bg-[#2563eb] hover:bg-[#1d4ed8]"
+                >
+                  {isLoading ? 'Guardando...' : 'Guardar usuario'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsNewUserOpen(false)}
+                  disabled={isLoading}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="shadow-md">

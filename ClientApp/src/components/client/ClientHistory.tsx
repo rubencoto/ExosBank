@@ -1,26 +1,75 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { mockTransactions, mockAccounts } from '../../lib/mockData';
 import { ArrowUpRight, ArrowDownLeft, TrendingUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface ClientHistoryProps {
   clientId: number;
 }
 
-export function ClientHistory({ clientId }: ClientHistoryProps) {
-  const clientAccounts = mockAccounts.filter(a => a.clientId === clientId);
-  const accountNumbers = clientAccounts.map(a => a.accountNumber);
-  
-  // Filtrar transacciones que involucran las cuentas del cliente
-  const clientTransactions = mockTransactions.filter(
-    t => accountNumbers.includes(t.fromAccount) || accountNumbers.includes(t.toAccount)
-  );
+interface Transaccion {
+  id: number;
+  fecha: string;
+  tipo: string;
+  descripcion: string;
+  origen: string;
+  destino: string;
+  monto: number;
+  estado: string;
+  es_enviada: boolean;
+}
 
-  const getTransactionType = (transaction: any) => {
-    const isOutgoing = accountNumbers.includes(transaction.fromAccount);
-    return isOutgoing ? 'outgoing' : 'incoming';
+interface HistorialData {
+  transacciones: Transaccion[];
+  total: number;
+  enviadas: number;
+  recibidas: number;
+}
+
+export function ClientHistory({ clientId }: ClientHistoryProps) {
+  const [historial, setHistorial] = useState<HistorialData>({
+    transacciones: [],
+    total: 0,
+    enviadas: 0,
+    recibidas: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchHistorial();
+  }, [clientId]);
+
+  const fetchHistorial = async () => {
+    try {
+      const response = await fetch('http://localhost/ExosBank/api/transacciones/historial.php', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al obtener historial');
+      }
+
+      const data = await response.json();
+
+      if (data.status === 'ok') {
+        setHistorial(data.data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (loading) {
+    return <div>Cargando historial...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -36,7 +85,7 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Transacciones</p>
-                <p className="text-2xl">{clientTransactions.length}</p>
+                <p className="text-2xl">{historial.total}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-blue-600" />
             </div>
@@ -49,7 +98,7 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Enviadas</p>
                 <p className="text-2xl text-red-600">
-                  {clientTransactions.filter(t => accountNumbers.includes(t.fromAccount)).length}
+                  {historial.enviadas}
                 </p>
               </div>
               <ArrowUpRight className="h-8 w-8 text-red-600" />
@@ -63,7 +112,7 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Recibidas</p>
                 <p className="text-2xl text-emerald-600">
-                  {clientTransactions.filter(t => accountNumbers.includes(t.toAccount)).length}
+                  {historial.recibidas}
                 </p>
               </div>
               <ArrowDownLeft className="h-8 w-8 text-emerald-600" />
@@ -91,19 +140,18 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clientTransactions.length === 0 ? (
+              {historial.transacciones.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     No hay transacciones registradas
                   </TableCell>
                 </TableRow>
               ) : (
-                clientTransactions.map((transaction) => {
-                  const type = getTransactionType(transaction);
+                historial.transacciones.map((transaccion) => {
                   return (
-                    <TableRow key={transaction.id}>
+                    <TableRow key={transaccion.id}>
                       <TableCell>
-                        {new Date(transaction.date).toLocaleDateString('es-ES', {
+                        {new Date(transaccion.fecha).toLocaleDateString('es-ES', {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -114,25 +162,25 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={type === 'outgoing' ? 'text-red-700 border-red-300' : 'text-emerald-700 border-emerald-300'}
+                          className={transaccion.es_enviada ? 'text-red-700 border-red-300' : 'text-emerald-700 border-emerald-300'}
                         >
-                          {type === 'outgoing' ? (
+                          {transaccion.es_enviada ? (
                             <ArrowUpRight className="h-3 w-3 mr-1" />
                           ) : (
                             <ArrowDownLeft className="h-3 w-3 mr-1" />
                           )}
-                          {type === 'outgoing' ? 'Enviado' : 'Recibido'}
+                          {transaccion.es_enviada ? 'Enviado' : 'Recibido'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{transaction.description}</TableCell>
-                      <TableCell className="font-mono text-xs">{transaction.fromAccount}</TableCell>
-                      <TableCell className="font-mono text-xs">{transaction.toAccount}</TableCell>
-                      <TableCell className={`${type === 'outgoing' ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {type === 'outgoing' ? '-' : '+'}${transaction.amount.toFixed(2)}
+                      <TableCell className="text-sm">{transaccion.descripcion}</TableCell>
+                      <TableCell className="font-mono text-xs">{transaccion.origen}</TableCell>
+                      <TableCell className="font-mono text-xs">{transaccion.destino}</TableCell>
+                      <TableCell className={`${transaccion.es_enviada ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {transaccion.es_enviada ? '-' : '+'}₡{transaccion.monto.toFixed(2)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={transaction.status === 'completed' ? 'default' : 'secondary'}>
-                          {transaction.status === 'completed' ? 'Completada' : 'Pendiente'}
+                        <Badge variant={transaccion.estado === 'Completada' ? 'default' : 'secondary'}>
+                          {transaccion.estado}
                         </Badge>
                       </TableCell>
                     </TableRow>

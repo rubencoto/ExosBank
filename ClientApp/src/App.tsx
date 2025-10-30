@@ -37,7 +37,10 @@ export default function App() {
     <>
       <div className="size-full">
         {currentView === "login" && (
-          <Login onLogin={handleLogin} />
+          <Login 
+            onLogin={handleLogin}
+            onRegister={() => setCurrentView("register")}
+          />
         )}
         {currentView === "admin" && userData && (
           <AdminDashboard

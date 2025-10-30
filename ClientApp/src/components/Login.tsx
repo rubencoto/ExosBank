@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -6,27 +6,71 @@ import exosLogo from 'figma:asset/f64e73f4c248a8bf63bd9ade8025b7b28f3a7d8a.png';
 
 interface LoginProps {
   onLogin: (role: 'admin' | 'client', userData: any) => void;
+  onRegister?: () => void;
 }
 
-export function Login({ onLogin }: LoginProps) {
+export function Login({ onLogin, onRegister }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
-    
-    // Determinar el rol basándose en el email
-    const isAdmin = email.toLowerCase().includes('admin') || email.toLowerCase() === 'admin@exosbank.com';
-    const role = isAdmin ? 'admin' : 'client';
-    
-    // Simular login exitoso
-    const userData = {
-      email,
-      name: role === 'admin' ? 'Admin Usuario' : 'Juan Pérez Solís',
-      id: role === 'admin' ? 1 : 2,
-    };
-    
-    onLogin(role, userData);
+    setIsLoading(true);
+    setError('');
+
+    try {
+      console.log('Intentando login con:', email);
+      
+      const response = await fetch('http://localhost/ExosBank/api/login.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: email,
+          password: password
+        })
+      });
+
+      console.log('Respuesta del servidor:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Datos recibidos:', data);
+
+      if (data.status === 'ok' && data.data) {
+        // Determinar el rol
+        const role = data.data.rol === 'Administrador' ? 'admin' : 'client';
+        
+        // Preparar datos del usuario
+        const userData = {
+          id: data.data.id_usuario,
+          name: data.data.nombre,
+          email: data.data.correo,
+          role: data.data.rol
+        };
+
+        // Guardar en localStorage
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isAuthenticated', 'true');
+
+        // Llamar al callback de login
+        onLogin(role, userData);
+      } else {
+        setError(data.message || 'Credenciales incorrectas');
+      }
+    } catch (err) {
+      console.error('Error de login:', err);
+      setError('Error de conexión con el servidor. Verifica que Apache esté corriendo.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -70,9 +114,20 @@ export function Login({ onLogin }: LoginProps) {
               />
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center">
+                {error}
+              </div>
+            )}
+
             {/* Submit Button */}
-            <Button type="submit" className="w-full bg-[#0B132B] hover:bg-[#1C2541]">
-              Iniciar sesión
+            <Button 
+              type="submit" 
+              className="w-full bg-[#0B132B] hover:bg-[#1C2541]"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </Button>
 
             {/* Forgot Password */}
@@ -81,14 +136,27 @@ export function Login({ onLogin }: LoginProps) {
                 ¿Olvidaste tu contraseña?
               </a>
             </div>
+
+            {/* Register Button */}
+            <div className="text-center pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600 mb-3">¿No tienes cuenta?</p>
+              <Button 
+                type="button"
+                variant="outline"
+                className="w-full border-[#0B132B] text-[#0B132B] hover:bg-[#0B132B] hover:text-white"
+                onClick={onRegister}
+              >
+                Aplicar para una cuenta
+              </Button>
+            </div>
           </form>
 
           {/* Demo Credentials */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-600 mb-2">Credenciales de prueba:</p>
-            <p className="text-xs text-gray-500">Admin: admin@exosbank.com</p>
-            <p className="text-xs text-gray-500">Cliente: Cualquier otro email</p>
-            <p className="text-xs text-gray-500 mt-1">Contraseña: cualquiera</p>
+            <p className="text-xs text-gray-500">Admin: admin@exosbank.com / Admin123</p>
+            <p className="text-xs text-gray-500">Cliente: juan@correo.com / Cliente123</p>
+            <p className="text-xs text-gray-500">Cliente: maria@correo.com / Cliente123</p>
           </div>
         </div>
       </div>

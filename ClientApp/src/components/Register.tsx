@@ -5,7 +5,6 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { UserPlus, CheckCircle2, ArrowLeft } from 'lucide-react';
 import exosLogo from 'figma:asset/f64e73f4c248a8bf63bd9ade8025b7b28f3a7d8a.png';
-import { toast } from 'sonner@2.0.3';
 
 interface RegisterProps {
   onBack: () => void;
@@ -18,9 +17,13 @@ export function Register({ onBack }: RegisterProps) {
     email: '',
     phone: '',
     address: '',
+    tipo_cuenta: '',
+    username: '',
     password: '',
     confirmPassword: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,26 +33,85 @@ export function Register({ onBack }: RegisterProps) {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setIsLoading(true);
 
     // Validaciones
     if (formData.password !== formData.confirmPassword) {
-      toast.error('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden');
+      setIsLoading(false);
       return;
     }
 
-    if (formData.password.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres');
+    if (formData.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      setIsLoading(false);
       return;
     }
 
-    // Simular registro exitoso
-    setShowSuccess(true);
-    setTimeout(() => {
-      toast.success('Cuenta creada exitosamente');
-      onBack();
-    }, 2000);
+    if (!formData.tipo_cuenta) {
+      setError('Debes seleccionar un tipo de cuenta');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Enviando datos de registro:', {
+        nombre: formData.name,
+        correo: formData.email,
+        cedula: formData.cedula,
+        direccion: formData.address,
+        telefono: formData.phone,
+        tipo_cuenta: formData.tipo_cuenta,
+        username: formData.username || formData.email
+      });
+
+      const response = await fetch('http://localhost/ExosBank/api/register.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          nombre: formData.name,
+          correo: formData.email,
+          cedula: formData.cedula,
+          direccion: formData.address,
+          telefono: formData.phone,
+          tipo_cuenta: formData.tipo_cuenta,
+          username: formData.username || formData.email,
+          password: formData.password
+        })
+      });
+
+      console.log('Respuesta HTTP:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Datos recibidos:', data);
+
+      if (data.status === 'ok') {
+        // Registro exitoso
+        setShowSuccess(true);
+        setTimeout(() => {
+          onBack();
+        }, 2000);
+      } else {
+        setError(data.message || 'Error al crear la cuenta');
+      }
+    } catch (err) {
+      console.error('Error completo de registro:', err);
+      setError(err instanceof Error ? err.message : 'Error de conexión con el servidor. Verifica que Apache esté corriendo.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (showSuccess) {
@@ -158,6 +220,38 @@ export function Register({ onBack }: RegisterProps) {
                   />
                 </div>
 
+                {/* Tipo de Cuenta */}
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="tipo_cuenta">Tipo de cuenta *</Label>
+                  <select
+                    id="tipo_cuenta"
+                    name="tipo_cuenta"
+                    value={formData.tipo_cuenta}
+                    onChange={(e) => setFormData({...formData, tipo_cuenta: e.target.value})}
+                    required
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Selecciona un tipo de cuenta</option>
+                    <option value="1">Cuenta Corriente</option>
+                    <option value="2">Cuenta de Ahorro</option>
+                    <option value="3">Cuenta de Crédito</option>
+                  </select>
+                </div>
+
+                {/* Nombre de Usuario */}
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="username">Nombre de usuario *</Label>
+                  <Input
+                    id="username"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleChange}
+                    required
+                    placeholder="usuario123"
+                  />
+                  <p className="text-xs text-muted-foreground">Este será tu identificador único para iniciar sesión</p>
+                </div>
+
                 {/* Contraseña */}
                 <div className="space-y-2">
                   <Label htmlFor="password">Contraseña *</Label>
@@ -187,10 +281,21 @@ export function Register({ onBack }: RegisterProps) {
                 </div>
               </div>
 
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center">
+                  {error}
+                </div>
+              )}
+
               {/* Submit Button */}
-              <Button type="submit" className="w-full bg-[#10b981] hover:bg-[#059669]">
+              <Button 
+                type="submit" 
+                className="w-full bg-[#10b981] hover:bg-[#059669]"
+                disabled={isLoading}
+              >
                 <UserPlus className="h-4 w-4 mr-2" />
-                Registrar cuenta
+                {isLoading ? 'Registrando...' : 'Registrar cuenta'}
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
