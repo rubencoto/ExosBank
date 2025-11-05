@@ -89,10 +89,10 @@ try {
     }
     
     // Login exitoso - crear sesión
-    $_SESSION['user_id'] = $usuario['id_usuario'];
-    $_SESSION['user_name'] = $usuario['nombre'];
-    $_SESSION['user_email'] = $usuario['correo'];
-    $_SESSION['user_rol'] = $usuario['rol'];
+    $_SESSION['usuario_id'] = $usuario['id_usuario'];
+    $_SESSION['nombre'] = $usuario['nombre'];
+    $_SESSION['correo'] = $usuario['correo'];
+    $_SESSION['rol'] = $usuario['rol'];
     $_SESSION['logged_in'] = true;
     
     sqlsrv_free_stmt($stmt);

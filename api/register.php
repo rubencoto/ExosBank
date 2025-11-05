@@ -153,11 +153,11 @@ try {
     
     sqlsrv_free_stmt($stmtCliente);
     
-    // Generar número de cuenta
-    $prefijo = str_pad($tipo_cuenta, 2, '0', STR_PAD_LEFT);
-    $userId6 = str_pad($idUsuario, 6, '0', STR_PAD_LEFT);
-    $random6 = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-    $numeroCuenta = $prefijo . '-' . $userId6 . '-' . $random6;
+    // Generar número de cuenta de 11 dígitos donde el último dígito indica el tipo
+    // Formato: 10 dígitos aleatorios + 1 dígito del tipo de cuenta
+    // Ejemplo: 12345678901 (tipo 1 = Corriente), 12345678902 (tipo 2 = Ahorro), 12345678903 (tipo 3 = Crédito)
+    $random10 = str_pad(rand(0, 9999999999), 10, '0', STR_PAD_LEFT);
+    $numeroCuenta = $random10 . $tipo_cuenta; // 10 dígitos random + 1 dígito tipo
     
     // Crear cuenta bancaria
     $sqlCuenta = "INSERT INTO dbo.Cuentas (id_cliente, numero_cuenta, tipo_cuenta, saldo) 

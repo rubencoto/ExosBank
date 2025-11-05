@@ -123,185 +123,132 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2>Mi Perfil</h2>
-        <p className="text-muted-foreground">Administra tu información personal</p>
+        <h1 className="text-4xl font-bold mb-2">{userData.nombre}</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Info Card */}
-        <div className="lg:col-span-1">
-          <Card className="shadow-md">
-            <CardContent className="p-6 text-center">
-              <div className="w-24 h-24 bg-gradient-to-br from-[#0B132B] to-[#1C2541] rounded-full mx-auto mb-4 flex items-center justify-center">
-                <User className="h-12 w-12 text-white" />
+      {/* Datos del Usuario */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="text-2xl">Datos del Usuario</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Columna 1 */}
+            <div className="space-y-6">
+              <div className="flex items-start gap-3">
+                <IdCard className="h-6 w-6 text-muted-foreground mt-1" />
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Cédula</p>
+                  <p className="text-lg font-medium">{userData.cedula}</p>
+                </div>
               </div>
-              <h3 className="mb-1">{userData.nombre}</h3>
-              <p className="text-sm text-muted-foreground">{userData.correo}</p>
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-xs text-muted-foreground">Cliente desde</p>
-                <p className="text-sm">Enero 2024</p>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Cuentas Bancarias */}
-          {userData.cuentas && userData.cuentas.length > 0 && (
-            <Card className="shadow-md mt-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Mis Cuentas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {userData.cuentas.map((cuenta) => (
-                  <div key={cuenta.id_cuenta} className="p-4 border rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold">{cuenta.numero_cuenta}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {tipoCuentaDescripcion[cuenta.tipo_cuenta.toString() as '1'|'2'|'3'] || 'Cuenta'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">₡{cuenta.saldo.toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">Saldo disponible</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+              <div className="flex items-start gap-3">
+                <MapPin className="h-6 w-6 text-muted-foreground mt-1" />
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Dirección</p>
+                  <p className="text-lg font-medium">{userData.direccion}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Columna 2 */}
+            <div className="space-y-6">
+              <div className="flex items-start gap-3">
+                <Mail className="h-6 w-6 text-muted-foreground mt-1" />
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Correo</p>
+                  <p className="text-lg font-medium break-all">{userData.correo}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <Phone className="h-6 w-6 text-muted-foreground mt-1" />
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Teléfono</p>
+                  <p className="text-lg font-medium">{userData.telefono}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Información de Contacto */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="text-2xl">Información de Contacto</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <Label htmlFor="email-edit" className="text-base">Correo electrónico</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="email-edit"
+                  name="email"
+                  type="email"
+                  defaultValue={userData.correo}
+                  className="pl-11 h-11 text-base"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone-edit" className="text-base">Teléfono</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="phone-edit"
+                  name="phone"
+                  defaultValue={userData.telefono}
+                  className="pl-11 h-11 text-base"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="address-edit" className="text-base">Dirección</Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="address-edit"
+                  name="address"
+                  defaultValue={userData.direccion}
+                  className="pl-11 h-11 text-base"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 flex gap-3 justify-end">
+            <Button
+              variant="outline"
+              className="px-6"
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#0B132B] hover:bg-[#1C2541] px-6"
+              disabled={saving}
+            >
+              {saving ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {successMessage && (
+        <div className="p-4 bg-green-100 text-green-700 rounded-md">
+          {successMessage}
         </div>
-
-        {/* Profile Form */}
-        <div className="lg:col-span-2">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Información Personal</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {successMessage && (
-                <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
-                  {successMessage}
-                </div>
-              )}
-              {error && (
-                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-                  {error}
-                </div>
-              )}
-              <form onSubmit={handleSaveProfile} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nombre completo</Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="name"
-                        name="name"
-                        defaultValue={userData.nombre}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="cedula">Cédula</Label>
-                    <div className="relative">
-                      <IdCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="cedula"
-                        name="cedula"
-                        defaultValue={userData.cedula}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Correo electrónico</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      defaultValue={userData.correo}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="phone"
-                      name="phone"
-                      defaultValue={userData.telefono}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="address">Dirección</Label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="address"
-                      name="address"
-                      defaultValue={userData.direccion}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-[#0B132B] hover:bg-[#1C2541]"
-                  disabled={saving}
-                >
-                  {saving ? 'Guardando...' : 'Guardar Cambios'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Security Card */}
-          <Card className="shadow-md mt-6">
-            <CardHeader>
-              <CardTitle>Seguridad</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">Contraseña actual</Label>
-                <Input id="currentPassword" type="password" placeholder="••••••••" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">Nueva contraseña</Label>
-                <Input id="newPassword" type="password" placeholder="••••••••" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>
-                <Input id="confirmPassword" type="password" placeholder="••••••••" />
-              </div>
-              <Button variant="outline" className="w-full">
-                Cambiar Contraseña
-              </Button>
-            </CardContent>
-          </Card>
+      )}
+      {error && (
+        <div className="p-4 bg-red-100 text-red-700 rounded-md">
+          {error}
         </div>
-      </div>
+      )}
     </div>
   );
 }

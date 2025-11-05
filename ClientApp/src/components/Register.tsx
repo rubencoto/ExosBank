@@ -234,7 +234,6 @@ export function Register({ onBack }: RegisterProps) {
                     <option value="">Selecciona un tipo de cuenta</option>
                     <option value="1">Cuenta Corriente</option>
                     <option value="2">Cuenta de Ahorro</option>
-                    <option value="3">Cuenta de Crédito</option>
                   </select>
                 </div>
 

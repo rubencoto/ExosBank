@@ -45,8 +45,8 @@ try {
     
     $userId = $_SESSION['usuario_id'];
     
-    // Obtener las cuentas del usuario
-    $queryCuentas = "SELECT c.id_cuenta, c.numero_cuenta 
+    // Obtener las cuentas del usuario con su tipo
+    $queryCuentas = "SELECT c.id_cuenta, c.numero_cuenta, c.tipo_cuenta
                      FROM dbo.Clientes cl
                      INNER JOIN dbo.Cuentas c ON cl.id_cliente = c.id_cliente
                      WHERE cl.id_usuario = ?";
@@ -58,8 +58,27 @@ try {
     }
     
     $cuentasUsuario = [];
+    $cuentasInfo = [];
     while ($cuenta = sqlsrv_fetch_array($stmtCuentas, SQLSRV_FETCH_ASSOC)) {
         $cuentasUsuario[] = $cuenta['id_cuenta'];
+        
+        $tipoCuentaNombre = '';
+        switch ($cuenta['tipo_cuenta']) {
+            case 1:
+                $tipoCuentaNombre = 'Cuenta Corriente';
+                break;
+            case 2:
+                $tipoCuentaNombre = 'Cuenta de Ahorro';
+                break;
+            default:
+                $tipoCuentaNombre = 'Cuenta Bancaria';
+        }
+        
+        $cuentasInfo[] = [
+            'numero_cuenta' => $cuenta['numero_cuenta'],
+            'tipo_cuenta' => $cuenta['tipo_cuenta'],
+            'tipo_cuenta_nombre' => $tipoCuentaNombre
+        ];
     }
     sqlsrv_free_stmt($stmtCuentas);
     
@@ -67,6 +86,7 @@ try {
         echo json_encode([
             'status' => 'ok',
             'data' => [
+                'cuentas' => [],
                 'transacciones' => [],
                 'total' => 0,
                 'enviadas' => 0,
@@ -128,7 +148,8 @@ try {
             'destino' => $transaccion['cuenta_destino'] ?? 'Externa',
             'monto' => floatval($transaccion['monto']),
             'estado' => $transaccion['estado'],
-            'es_enviada' => $esEnviada
+            'es_enviada' => $esEnviada,
+            'numero_cuenta' => $esEnviada ? $transaccion['cuenta_origen'] : $transaccion['cuenta_destino']
         ];
     }
     
@@ -138,6 +159,7 @@ try {
     echo json_encode([
         'status' => 'ok',
         'data' => [
+            'cuentas' => $cuentasInfo,
             'transacciones' => $transacciones,
             'total' => count($transacciones),
             'enviadas' => $enviadas,

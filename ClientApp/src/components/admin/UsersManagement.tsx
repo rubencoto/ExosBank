@@ -8,7 +8,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { mockUsers, User } from '../../lib/mockData';
-import { Edit, Trash2, UserPlus } from 'lucide-react';
+import { Edit, Trash2, UserPlus, CreditCard, Eye } from 'lucide-react';
 
 interface NewUserForm {
   nombre: string;
@@ -20,6 +20,14 @@ interface NewUserForm {
   direccion: string;
 }
 
+interface Cuenta {
+  id_cuenta: number;
+  numero_cuenta: string;
+  tipo_cuenta: number;
+  tipo_cuenta_nombre: string;
+  saldo: number;
+}
+
 export function UsersManagement() {
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -27,6 +35,13 @@ export function UsersManagement() {
   const [isNewUserOpen, setIsNewUserOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estado para ver cuentas de cliente
+  const [viewingUserAccounts, setViewingUserAccounts] = useState<User | null>(null);
+  const [isAccountsOpen, setIsAccountsOpen] = useState(false);
+  const [userAccounts, setUserAccounts] = useState<Cuenta[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  
   const [newUser, setNewUser] = useState<NewUserForm>({
     nombre: '',
     correo: '',
@@ -136,6 +151,55 @@ export function UsersManagement() {
     if (confirm('¿Estás seguro de eliminar este usuario?')) {
       setUsers(users.filter(u => u.id !== userId));
     }
+  };
+
+  const handleViewAccounts = async (user: User) => {
+    setViewingUserAccounts(user);
+    setIsAccountsOpen(true);
+    setLoadingAccounts(true);
+    setUserAccounts([]);
+
+    try {
+      // Obtener las cuentas del cliente desde el backend
+      const response = await fetch(`http://localhost/ExosBank/api/admin/cliente-cuentas.php?id_usuario=${user.id}`, {
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'ok' && data.data.cuentas) {
+        setUserAccounts(data.data.cuentas);
+      } else {
+        console.error('Error al obtener cuentas:', data.message);
+      }
+    } catch (err) {
+      console.error('Error al cargar cuentas del cliente:', err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  const getAccountTypeBadge = (tipo: number) => {
+    const config = {
+      1: { color: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100', label: 'Corriente', icon: '💳' },
+      2: { color: 'bg-blue-100 text-blue-800 hover:bg-blue-100', label: 'Ahorro', icon: '🏦' },
+    };
+    
+    const item = config[tipo as keyof typeof config] || config[1];
+    
+    return (
+      <Badge variant="secondary" className={item.color}>
+        <span className="mr-1">{item.icon}</span>
+        {item.label}
+      </Badge>
+    );
+  };
+
+  const formatAccountNumber = (numero: string) => {
+    if (numero.length === 11) {
+      return `${numero.slice(0, 4)}-${numero.slice(4, 8)}-${numero.slice(8)}`;
+    }
+    return numero;
   };
 
   return (
@@ -310,6 +374,14 @@ export function UsersManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewAccounts(user)}
+                        title="Ver cuentas del cliente"
+                      >
+                        <CreditCard className="h-4 w-4" />
+                      </Button>
                       <Dialog open={isEditOpen && editingUser?.id === user.id} onOpenChange={(open) => {
                         setIsEditOpen(open);
                         if (!open) setEditingUser(null);
@@ -406,6 +478,87 @@ export function UsersManagement() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Modal para ver cuentas del cliente */}
+      <Dialog open={isAccountsOpen} onOpenChange={setIsAccountsOpen}>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>Cuentas de {viewingUserAccounts?.name}</DialogTitle>
+            <DialogDescription>
+              Administra las cuentas bancarias de este cliente
+            </DialogDescription>
+          </DialogHeader>
+          
+          {loadingAccounts ? (
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground">Cargando cuentas...</p>
+            </div>
+          ) : userAccounts.length === 0 ? (
+            <div className="py-8 text-center">
+              <CreditCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground">Este cliente no tiene cuentas registradas</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Resumen */}
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">{userAccounts.length}</div>
+                    <p className="text-xs text-muted-foreground">Total cuentas</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">
+                      ${userAccounts.reduce((sum, c) => sum + c.saldo, 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Saldo total</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">
+                      {new Set(userAccounts.map(c => c.tipo_cuenta)).size}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Tipos de cuenta</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de cuentas */}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Número de Cuenta</TableHead>
+                    <TableHead>Saldo</TableHead>
+                    <TableHead>Estado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {userAccounts.map((cuenta) => (
+                    <TableRow key={cuenta.id_cuenta}>
+                      <TableCell>{getAccountTypeBadge(cuenta.tipo_cuenta)}</TableCell>
+                      <TableCell className="font-mono text-base">
+                        {formatAccountNumber(cuenta.numero_cuenta)}
+                      </TableCell>
+                      <TableCell className="text-lg font-semibold text-emerald-600">
+                        ${cuenta.saldo.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="default" className="bg-emerald-600">
+                          ✓ Activa
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

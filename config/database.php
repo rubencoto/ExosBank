@@ -3,7 +3,7 @@
 define('DB_SERVER', getenv('DB_SERVER') ?: 'tcp:exos-cr.database.windows.net,1433');
 define('DB_NAME', getenv('DB_NAME') ?: 'exos_db');
 define('DB_USER', getenv('DB_USER') ?: 'exosadmin');
-define('DB_PASSWORD', getenv('DB_PASSWORD') ?: '');
+define('DB_PASSWORD', getenv('DB_PASSWORD') ?: 'Admin2025**');
 define('DB_CHARSET', 'UTF-8');
 
 class Database {
