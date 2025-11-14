@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { ArrowUpRight, ArrowDownLeft, CreditCard } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, CreditCard, TrendingUp } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface ClientHistoryProps {
@@ -57,32 +57,37 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Error al obtener historial');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al obtener historial');
       }
 
       const data = await response.json();
 
       if (data.status === 'ok') {
         setHistorial(data.data);
+        setError(''); // Limpiar cualquier error previo
+      } else {
+        throw new Error(data.message || 'Error al procesar historial');
       }
     } catch (err) {
+      console.error('Error al cargar historial:', err);
       setError(err instanceof Error ? err.message : 'Error de conexión');
     } finally {
       setLoading(false);
     }
   };
 
-  // Agrupar transacciones por cuenta
-  const transaccionesPorCuenta: Record<string, { cuenta: Cuenta, transacciones: Transaccion[] }> = historial.cuentas.reduce((acc, cuenta) => {
-    const transacciones = historial.transacciones.filter(t => 
-      t.origen === cuenta.numero_cuenta || t.destino === cuenta.numero_cuenta
-    );
-    acc[cuenta.numero_cuenta] = {
-      cuenta,
-      transacciones
-    };
-    return acc;
-  }, {} as Record<string, { cuenta: Cuenta, transacciones: Transaccion[] }>);
+  // Agrupar transacciones por cuenta - Ya no se usa, se muestran todas juntas
+  // const transaccionesPorCuenta: Record<string, { cuenta: Cuenta, transacciones: Transaccion[] }> = historial.cuentas.reduce((acc, cuenta) => {
+  //   const transacciones = historial.transacciones.filter(t => 
+  //     t.origen === cuenta.numero_cuenta || t.destino === cuenta.numero_cuenta
+  //   );
+  //   acc[cuenta.numero_cuenta] = {
+  //     cuenta,
+  //     transacciones
+  //   };
+  //   return acc;
+  // }, {} as Record<string, { cuenta: Cuenta, transacciones: Transaccion[] }>);
 
   const getAccountTypeBadge = (tipo: number) => {
     const config = {
@@ -115,7 +120,7 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
     return (
       <div className="space-y-6">
         <div>
-          <h2>Historial de Transacciones</h2>
+          <h2 className="text-3xl font-bold">Historial de Transacciones</h2>
           <p className="text-muted-foreground">Revisa todas tus operaciones</p>
         </div>
         <Card className="shadow-md border-red-200">
@@ -134,137 +139,139 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold">Historial de Transacciones</h2>
-        <p className="text-muted-foreground">Revisa todas tus operaciones por cuenta</p>
+        <p className="text-muted-foreground">Revisa todas tus operaciones</p>
       </div>
 
-      {/* Mostrar mensaje si no hay cuentas */}
-      {historial.cuentas.length === 0 ? (
-        <Card className="shadow-md">
-          <CardContent className="py-12">
-            <div className="text-center">
-              <CreditCard className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-xl font-semibold mb-2">No tienes cuentas registradas</h3>
-              <p className="text-muted-foreground">
-                Crea una cuenta para empezar a realizar transacciones
-              </p>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="shadow-md border-l-4 border-l-blue-500">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-muted-foreground font-medium">Total Transacciones</p>
+              <TrendingUp className="h-5 w-5 text-blue-500" />
             </div>
+            <p className="text-4xl font-bold">{historial.total}</p>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          {/* Transacciones agrupadas por cuenta */}
-          {Object.entries(transaccionesPorCuenta).map(([numeroCuenta, { cuenta, transacciones }]) => (
-            <Card key={numeroCuenta} className="shadow-md">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {cuenta.tipo_cuenta === 1 ? (
-                      <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center text-2xl">
-                        💳
-                      </div>
-                    ) : (
-                      <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">
-                        🏦
-                      </div>
-                    )}
-                    <div>
-                      <CardTitle className="text-2xl">
-                        Cuenta de {cuenta.tipo_cuenta_nombre}
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground font-mono mt-1">
-                        {numeroCuenta}
-                      </p>
-                    </div>
-                  </div>
-                  {getAccountTypeBadge(cuenta.tipo_cuenta)}
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6">
-                {transacciones.length === 0 ? (
-                  <div className="text-center py-8">
-                    <CreditCard className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-40" />
-                    <p className="text-muted-foreground text-lg">
-                      No hay transacciones para mostrar
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Esta cuenta no tiene movimientos registrados
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Descripción</TableHead>
-                          <TableHead>Destino/Origen</TableHead>
-                          <TableHead className="text-right">Monto</TableHead>
-                          <TableHead>Estado</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {transacciones.map((transaccion) => {
-                          const esEnviada = transaccion.origen === numeroCuenta;
-                          const otraCuenta = esEnviada ? transaccion.destino : transaccion.origen;
-                          
-                          return (
-                            <TableRow key={transaccion.id}>
-                              <TableCell className="whitespace-nowrap">
-                                {new Date(transaccion.fecha).toLocaleDateString('es-ES', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                })}
-                                <div className="text-xs text-muted-foreground">
-                                  {new Date(transaccion.fecha).toLocaleTimeString('es-ES', {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={esEnviada ? 'text-red-700 border-red-300 bg-red-50' : 'text-emerald-700 border-emerald-300 bg-emerald-50'}
-                                >
-                                  {esEnviada ? (
-                                    <ArrowUpRight className="h-3 w-3 mr-1" />
-                                  ) : (
-                                    <ArrowDownLeft className="h-3 w-3 mr-1" />
-                                  )}
-                                  {esEnviada ? 'Enviado' : 'Recibido'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm max-w-[200px] truncate">
-                                {transaccion.descripcion}
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">
-                                {otraCuenta}
-                              </TableCell>
-                              <TableCell className={`font-semibold text-right text-lg ${esEnviada ? 'text-red-600' : 'text-emerald-600'}`}>
-                                {esEnviada ? '-' : '+'}₡{transaccion.monto.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant={transaccion.estado === 'Completada' ? 'default' : 'secondary'}
-                                  className={transaccion.estado === 'Completada' ? 'bg-green-100 text-green-800' : ''}
-                                >
-                                  {transaccion.estado}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </>
-      )}
+
+        <Card className="shadow-md border-l-4 border-l-red-500">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-muted-foreground font-medium">Enviadas</p>
+              <ArrowUpRight className="h-5 w-5 text-red-500" />
+            </div>
+            <p className="text-4xl font-bold">{historial.enviadas}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-md border-l-4 border-l-emerald-500">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-muted-foreground font-medium">Recibidas</p>
+              <ArrowDownLeft className="h-5 w-5 text-emerald-500" />
+            </div>
+            <p className="text-4xl font-bold">{historial.recibidas}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Movimientos Recientes - Tabla única */}
+      <Card className="shadow-md">
+        <CardHeader className="border-b">
+          <CardTitle className="text-xl">Movimientos Recientes</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {historial.transacciones.length === 0 ? (
+            <div className="text-center py-12">
+              <CreditCard className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-xl font-semibold mb-2">No hay transacciones</h3>
+              <p className="text-muted-foreground">
+                Aún no tienes movimientos registrados
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">Fecha</TableHead>
+                    <TableHead className="font-semibold">Tipo</TableHead>
+                    <TableHead className="font-semibold">Descripción</TableHead>
+                    <TableHead className="font-semibold">Origen</TableHead>
+                    <TableHead className="font-semibold">Destino</TableHead>
+                    <TableHead className="font-semibold text-right">Monto</TableHead>
+                    <TableHead className="font-semibold">Estado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historial.transacciones.map((transaccion) => {
+                    const esEnviada = historial.cuentas.some(c => c.numero_cuenta === transaccion.origen);
+                    
+                    return (
+                      <TableRow key={transaccion.id} className="hover:bg-muted/30">
+                        <TableCell className="whitespace-nowrap">
+                          {new Date(transaccion.fecha).toLocaleDateString('es-ES', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(transaccion.fecha).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={esEnviada ? 'text-red-700 border-red-300 bg-red-50' : 'text-emerald-700 border-emerald-300 bg-emerald-50'}
+                          >
+                            {esEnviada ? (
+                              <>
+                                <ArrowUpRight className="h-3 w-3 mr-1" />
+                                Enviado
+                              </>
+                            ) : (
+                              <>
+                                <ArrowDownLeft className="h-3 w-3 mr-1" />
+                                Recibido
+                              </>
+                            )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          <span className="font-medium">{transaccion.descripcion}</span>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground">
+                          {transaccion.origen}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground">
+                          {transaccion.destino}
+                        </TableCell>
+                        <TableCell className={`font-semibold text-right ${esEnviada ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {esEnviada ? '-' : '+'}${transaccion.monto.toLocaleString('es-ES', { 
+                            minimumFractionDigits: 2, 
+                            maximumFractionDigits: 2 
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="secondary"
+                            className="bg-emerald-100 text-emerald-800 border-emerald-200"
+                          >
+                            {transaccion.estado}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

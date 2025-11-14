@@ -46,6 +46,8 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
   const [errors, setErrors] = useState<FormErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -105,11 +107,49 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      // Aquí iría la lógica para guardar el usuario
-      setIsSuccessModalOpen(true);
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    try {
+      const response = await fetch('http://localhost/ExosBank/api/usuarios/create.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          nombre: formData.fullName,
+          correo: formData.email,
+          contrasena: formData.password,
+          rol: formData.role === 'admin' ? 'Administrador' : 'Cliente',
+          telefono: formData.phone,
+          cedula: formData.cedula,
+          direccion: formData.address,
+          tipo_cuenta: '1' // Por defecto cuenta corriente
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setIsSuccessModalOpen(true);
+      } else {
+        setSubmitError(data.message || 'Error al crear el usuario');
+      }
+    } catch (error) {
+      console.error('Error al crear usuario:', error);
+      setSubmitError('Error de conexión. Verifica que Apache esté corriendo.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -317,18 +357,27 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                 <Button
                   type="submit"
                   className="flex-1 bg-[#3b82f6] hover:bg-[#2563eb]"
+                  disabled={isSubmitting}
                 >
-                  Guardar usuario
+                  {isSubmitting ? 'Guardando...' : 'Guardar usuario'}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleCancelClick}
                   className="flex-1"
+                  disabled={isSubmitting}
                 >
                   Cancelar
                 </Button>
               </div>
+
+              {/* Error de envío */}
+              {submitError && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center">
+                  {submitError}
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
