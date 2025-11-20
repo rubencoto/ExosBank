@@ -4,8 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { mockTransactions } from '../../lib/mockData';
-import { Trash2, Plus, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
+import { Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../ui/alert';
 
 interface Cuenta {
@@ -22,14 +21,30 @@ interface Cuenta {
   };
 }
 
+interface Movimiento {
+  id: number;
+  fecha: string;
+  tipo: string;
+  origen: string;
+  destino: string;
+  monto: number;
+  descripcion: string;
+  estado: string;
+  origen_nombre?: string | null;
+  destino_nombre?: string | null;
+}
+
 export function AccountsManagement() {
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
-  const [transactions] = useState(mockTransactions);
+  const [transactions, setTransactions] = useState<Movimiento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
+  const [transactionsError, setTransactionsError] = useState('');
 
   useEffect(() => {
     fetchCuentas();
+    fetchTransacciones();
   }, []);
 
   const fetchCuentas = async () => {
@@ -37,7 +52,7 @@ export function AccountsManagement() {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost/ExosBank/api/admin/cuentas.php', {
+      const response = await fetch('/api/admin/cuentas.php', {
         credentials: 'include'
       });
 
@@ -61,13 +76,42 @@ export function AccountsManagement() {
     }
   };
 
+  const fetchTransacciones = async () => {
+    try {
+      setLoadingTransactions(true);
+      setTransactionsError('');
+
+      const response = await fetch('/api/admin/transacciones.php?limit=200', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al obtener transacciones');
+      }
+
+      const data = await response.json();
+
+      if (data.status === 'ok' && data.data?.transacciones) {
+        setTransactions(data.data.transacciones);
+      } else {
+        throw new Error(data.message || 'Respuesta inválida del servidor');
+      }
+    } catch (err) {
+      console.error('Error al cargar transacciones:', err);
+      setTransactionsError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
   const handleDeleteAccount = async (idCuenta: number) => {
     if (!confirm('¿Estás seguro de que deseas eliminar esta cuenta? Esta acción no se puede deshacer.')) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost/ExosBank/api/admin/cuentas.php?id=${idCuenta}`, {
+      const response = await fetch(`/api/admin/cuentas.php?id=${idCuenta}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -274,52 +318,91 @@ export function AccountsManagement() {
         {/* Transactions Tab */}
         <TabsContent value="transactions" className="space-y-4">
           <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Historial de Transacciones</CardTitle>
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Historial de Transacciones</CardTitle>
+                <p className="text-sm text-muted-foreground">Últimos movimientos registrados en el sistema</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={fetchTransacciones} disabled={loadingTransactions}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingTransactions ? 'animate-spin' : ''}`} />
+                  Actualizar
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Origen</TableHead>
-                    <TableHead>Destino</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>#{transaction.id}</TableCell>
-                      <TableCell>
-                        {new Date(transaction.date).toLocaleDateString('es-ES', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </TableCell>
-                      <TableCell className="capitalize">
-                        <Badge variant="outline">{transaction.type}</Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{transaction.fromAccount}</TableCell>
-                      <TableCell className="font-mono text-xs">{transaction.toAccount}</TableCell>
-                      <TableCell className="font-semibold">${transaction.amount.toFixed(2)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{transaction.description}</TableCell>
-                      <TableCell>
-                        <Badge variant={transaction.status === 'completed' ? 'default' : 'secondary'}>
-                          {transaction.status === 'completed' ? 'Completada' : 'Pendiente'}
-                        </Badge>
-                      </TableCell>
+              {transactionsError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{transactionsError}</AlertDescription>
+                </Alert>
+              )}
+
+              {loadingTransactions ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+                  Cargando transacciones...
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  No hay transacciones registradas.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Origen</TableHead>
+                      <TableHead>Destino</TableHead>
+                      <TableHead>Monto</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Estado</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.map((transaction) => (
+                      <TableRow key={transaction.id}>
+                        <TableCell>#{transaction.id}</TableCell>
+                        <TableCell>
+                          {transaction.fecha ? new Date(transaction.fecha).toLocaleDateString('es-ES', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : 'Sin fecha'}
+                        </TableCell>
+                        <TableCell className="capitalize">
+                          <Badge variant="outline">{transaction.tipo}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {transaction.origen}
+                          {transaction.origen_nombre && (
+                            <span className="block text-[11px] text-muted-foreground">{transaction.origen_nombre}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {transaction.destino}
+                          {transaction.destino_nombre && (
+                            <span className="block text-[11px] text-muted-foreground">{transaction.destino_nombre}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          ${transaction.monto.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{transaction.descripcion}</TableCell>
+                        <TableCell>
+                          <Badge variant={transaction.estado === 'Completada' ? 'default' : 'secondary'}>
+                            {transaction.estado}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

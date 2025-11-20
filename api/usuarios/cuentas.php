@@ -26,8 +26,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit();
 }
 
-// Verificar sesión activa
-if (!isset($_SESSION['usuario_id'])) {
+// Verificar autenticación (sesión o token JWT)
+$userId = null;
+$userName = null;
+
+// Primero intentar con sesión
+if (isset($_SESSION['usuario_id'])) {
+    $userId = $_SESSION['usuario_id'];
+    $userName = $_SESSION['nombre'] ?? 'Usuario';
+} else {
+    // Si no hay sesión, intentar con token JWT
+    require_once __DIR__ . '/../../config/jwt.php';
+    $tokenData = JWTHelper::validateAuthToken();
+    if ($tokenData && isset($tokenData['user_id'])) {
+        $userId = $tokenData['user_id'];
+        $userName = $tokenData['nombre'] ?? 'Usuario';
+    }
+}
+
+if (!$userId) {
     http_response_code(401);
     echo json_encode([
         'status' => 'error',
@@ -42,20 +59,18 @@ require_once __DIR__ . '/../../config/database.php';
 try {
     $database = new Database();
     $conn = $database->getConnection();
-    
-    $userId = $_SESSION['usuario_id'];
-    
+
     // Obtener id_cliente del usuario
     $queryCliente = "SELECT id_cliente FROM dbo.Clientes WHERE id_usuario = ?";
     $stmtCliente = sqlsrv_prepare($conn, $queryCliente, array(&$userId));
-    
+
     if (!$stmtCliente || !sqlsrv_execute($stmtCliente)) {
-        throw new Exception('Error al obtener datos del cliente: ' . print_r(sqlsrv_errors(), true));
+        throw new Exception('Error al obtener datos del cliente');
     }
-    
+
     $cliente = sqlsrv_fetch_array($stmtCliente, SQLSRV_FETCH_ASSOC);
     sqlsrv_free_stmt($stmtCliente);
-    
+
     if (!$cliente) {
         http_response_code(404);
         echo json_encode([
@@ -64,21 +79,21 @@ try {
         ]);
         exit();
     }
-    
+
     $clienteId = $cliente['id_cliente'];
-    
+
     // Obtener cuentas bancarias del cliente
     $queryCuentas = "SELECT id_cuenta, numero_cuenta, tipo_cuenta, saldo
                      FROM dbo.Cuentas 
                      WHERE id_cliente = ?
                      ORDER BY id_cuenta DESC";
-    
+
     $stmtCuentas = sqlsrv_prepare($conn, $queryCuentas, array(&$clienteId));
-    
+
     if (!$stmtCuentas || !sqlsrv_execute($stmtCuentas)) {
-        throw new Exception('Error al obtener cuentas: ' . print_r(sqlsrv_errors(), true));
+        throw new Exception('Error al obtener cuentas');
     }
-    
+
     $cuentas = [];
     while ($cuenta = sqlsrv_fetch_array($stmtCuentas, SQLSRV_FETCH_ASSOC)) {
         // Determinar el nombre del tipo de cuenta basado en el último dígito
@@ -93,7 +108,7 @@ try {
             default:
                 $tipoCuentaNombre = 'Cuenta Bancaria';
         }
-        
+
         $cuentas[] = [
             'id_cuenta' => $cuenta['id_cuenta'],
             'numero_cuenta' => $cuenta['numero_cuenta'],
@@ -102,10 +117,10 @@ try {
             'saldo' => floatval($cuenta['saldo'])
         ];
     }
-    
+
     sqlsrv_free_stmt($stmtCuentas);
     $database->closeConnection();
-    
+
     echo json_encode([
         'status' => 'ok',
         'data' => [
@@ -114,7 +129,6 @@ try {
             'cuentas' => $cuentas
         ]
     ]);
-    
 } catch (Exception $e) {
     error_log('Error en cuentas.php: ' . $e->getMessage());
     http_response_code(500);

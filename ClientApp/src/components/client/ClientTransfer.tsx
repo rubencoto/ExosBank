@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { mockAccounts } from '../../lib/mockData';
 import { ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,15 +13,61 @@ interface ClientTransferProps {
 }
 
 export function ClientTransfer({ clientId }: ClientTransferProps) {
+  interface CuentaUsuario {
+    id_cuenta: number;
+    numero_cuenta: string;
+    tipo_cuenta: number;
+    saldo: number;
+  }
+
+  const [accounts, setAccounts] = useState<CuentaUsuario[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [accountsError, setAccountsError] = useState('');
   const [fromAccount, setFromAccount] = useState('');
   const [toAccount, setToAccount] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const clientAccounts = mockAccounts.filter(a => a.clientId === clientId);
+  useEffect(() => {
+    fetchAccounts();
+  }, [clientId]);
 
-  const handleTransfer = (e: React.FormEvent) => {
+  const fetchAccounts = async () => {
+    try {
+      setLoadingAccounts(true);
+      setAccountsError('');
+
+      const response = await fetch('/api/usuarios/cuentas.php', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al obtener cuentas');
+      }
+
+      const data = await response.json();
+
+      if (data.status === 'ok' && data.data?.cuentas) {
+        setAccounts(data.data.cuentas);
+        // Mantener seleccionada la cuenta previa si sigue disponible
+        if (fromAccount && !data.data.cuentas.some((c: CuentaUsuario) => c.numero_cuenta === fromAccount)) {
+          setFromAccount('');
+        }
+      } else {
+        throw new Error(data.message || 'No se pudieron obtener las cuentas');
+      }
+    } catch (err) {
+      console.error('Error al cargar cuentas para transferencias:', err);
+      setAccountsError(err instanceof Error ? err.message : 'Error de conexión');
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!fromAccount || !toAccount || !amount) {
@@ -36,23 +81,52 @@ export function ClientTransfer({ clientId }: ClientTransferProps) {
     }
 
     const amountNum = parseFloat(amount);
-    const sourceAccount = clientAccounts.find(a => a.accountNumber === fromAccount);
+    const sourceAccount = accounts.find(a => a.numero_cuenta === fromAccount);
     
-    if (sourceAccount && amountNum > sourceAccount.balance) {
+    if (sourceAccount && amountNum > sourceAccount.saldo) {
       toast.error('Saldo insuficiente');
       return;
     }
 
-    // Simular transferencia exitosa
-    setShowSuccess(true);
-    setTimeout(() => {
-      setShowSuccess(false);
-      setFromAccount('');
-      setToAccount('');
-      setAmount('');
-      setDescription('');
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/transacciones/transferir.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          cuenta_origen: fromAccount,
+          cuenta_destino: toAccount,
+          monto: amountNum,
+          descripcion: description,
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status !== 'ok') {
+        throw new Error(data.message || 'No se pudo completar la transferencia');
+      }
+
+      setShowSuccess(true);
       toast.success('Transferencia realizada exitosamente');
-    }, 2000);
+      await fetchAccounts();
+      setTimeout(() => {
+        setShowSuccess(false);
+        setFromAccount('');
+        setToAccount('');
+        setAmount('');
+        setDescription('');
+      }, 1500);
+    } catch (err) {
+      console.error('Error en transferencia:', err);
+      toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (showSuccess) {
@@ -71,7 +145,69 @@ export function ClientTransfer({ clientId }: ClientTransferProps) {
     );
   }
 
-  const selectedSourceAccount = clientAccounts.find(a => a.accountNumber === fromAccount);
+  const selectedSourceAccount = accounts.find(a => a.numero_cuenta === fromAccount);
+
+  if (loadingAccounts) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4" />
+          <p className="text-muted-foreground">Cargando cuentas disponibles...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accountsError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">Realizar Transferencia</h2>
+          <p className="text-muted-foreground">No pudimos cargar tus cuentas bancarias.</p>
+        </div>
+        <Card className="shadow-md border-red-200">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="rounded-full bg-red-100 p-3">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Error al cargar cuentas</h3>
+                <p className="text-sm text-muted-foreground mb-4">{accountsError}</p>
+                {accountsError.includes('IP address') && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left text-sm">
+                    <p className="font-semibold text-yellow-800 mb-2">💡 Solución:</p>
+                    <p className="text-yellow-700">
+                      Autoriza tu IP en Azure SQL Database desde el portal antes de intentar de nuevo.
+                    </p>
+                  </div>
+                )}
+                <Button onClick={fetchAccounts} className="mt-4">
+                  Reintentar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">Realizar Transferencia</h2>
+          <p className="text-muted-foreground">Aún no tienes cuentas activas para transferir.</p>
+        </div>
+        <Card className="shadow-md">
+          <CardContent className="pt-6 text-center">
+            <p className="text-muted-foreground">Solicita a un administrador la creación de tu primera cuenta bancaria.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -97,12 +233,12 @@ export function ClientTransfer({ clientId }: ClientTransferProps) {
                       <SelectValue placeholder="Selecciona una cuenta" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clientAccounts.map((account) => (
-                        <SelectItem key={account.id} value={account.accountNumber}>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id_cuenta} value={account.numero_cuenta}>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono">{account.accountNumber}</span>
+                            <span className="font-mono">{account.numero_cuenta}</span>
                             <span className="text-muted-foreground">•</span>
-                            <span className="font-semibold">${account.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                            <span className="font-semibold">${account.saldo.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -111,7 +247,7 @@ export function ClientTransfer({ clientId }: ClientTransferProps) {
                   {selectedSourceAccount && (
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
                       <AlertCircle className="h-4 w-4" />
-                      Saldo disponible: ${selectedSourceAccount.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                      Saldo disponible: ${selectedSourceAccount.saldo.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                     </p>
                   )}
                 </div>
@@ -176,8 +312,9 @@ export function ClientTransfer({ clientId }: ClientTransferProps) {
                   type="submit"
                   className="w-full bg-[#0B132B] hover:bg-[#1C2541] h-12 text-base font-semibold"
                   size="lg"
+                  disabled={isSubmitting}
                 >
-                  Confirmar Transferencia
+                  {isSubmitting ? 'Procesando...' : 'Confirmar Transferencia'}
                 </Button>
               </form>
             </CardContent>

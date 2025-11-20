@@ -1,0 +1,13 @@
+{
+    "name": "exosbank/notifications",
+    "description": "Sistema de notificaciones ExosBank",
+    "type": "project",
+    "require": {
+        "phpmailer/phpmailer": "6.8"
+    },
+    "authors": [
+        {
+            "name": "Sistema ExosBank"
+        }
+    ]
+}

@@ -10,7 +10,7 @@ if (preg_match('/^http:\/\/localhost(:\d+)?$/', $origin)) {
 }
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Methods: PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Credentials: true');
 
 // Manejar preflight
@@ -78,89 +78,192 @@ if (!filter_var($data['correo'], FILTER_VALIDATE_EMAIL)) {
 try {
     $database = new Database();
     $conn = $database->getConnection();
-    
+
     $userId = $_SESSION['usuario_id'];
-    
-    // Verificar si el email ya existe para otro usuario
-    $queryCheck = "SELECT id_usuario FROM dbo.Usuarios WHERE correo = ? AND id_usuario != ?";
-    $stmtCheck = sqlsrv_prepare($conn, $queryCheck, array(&$data['correo'], &$userId));
-    
-    if ($stmtCheck && sqlsrv_execute($stmtCheck)) {
-        if (sqlsrv_fetch($stmtCheck)) {
-            sqlsrv_free_stmt($stmtCheck);
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'El correo ya está registrado'
-            ]);
-            exit();
+
+    // Obtener IP del cliente para auditoría
+    $clientIP = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+    // Intentar usar el procedimiento almacenado si está disponible
+    $useStoredProcedure = true;
+    $resultCode = 0;
+    $resultMessage = '';
+
+    if ($useStoredProcedure) {
+        try {
+            // Ejecutar el procedimiento almacenado usando una consulta directa
+            $sql = "
+                DECLARE @result_code INT = 0;
+                DECLARE @result_message NVARCHAR(500) = '';
+                
+                EXEC dbo.sp_update_user_profile 
+                    @p_user_id = ?, 
+                    @p_nombre = ?, 
+                    @p_correo = ?, 
+                    @p_cedula = ?, 
+                    @p_direccion = ?, 
+                    @p_telefono = ?,
+                    @p_result_code = @result_code OUTPUT,
+                    @p_result_message = @result_message OUTPUT;
+                
+                SELECT @result_code as result_code, @result_message as result_message;
+            ";
+
+            $params = array(
+                $userId,
+                $data['nombre'],
+                $data['correo'],
+                $data['cedula'],
+                $data['direccion'],
+                $data['telefono']
+            );
+
+            $stmt = $database->executeQuery($sql, $params);
+
+            if ($stmt) {
+                if ($database->fetch($stmt)) {
+                    $resultCode = $database->getField($stmt, 0);
+                    $resultMessage = $database->getField($stmt, 1);
+                }
+                $database->freeStatement($stmt);
+
+                // Verificar el resultado del procedimiento
+                if ($resultCode !== 0) {
+                    $httpCode = 400;
+
+                    // Mapear códigos de error específicos
+                    switch ($resultCode) {
+                        case 1:
+                            $httpCode = 404;
+                            break;
+                        case 2:
+                        case 3:
+                            $httpCode = 409; // Conflict
+                            break;
+                        case 4:
+                            $httpCode = 500;
+                            break;
+                        case 99:
+                            $httpCode = 500;
+                            break;
+                    }
+
+                    http_response_code($httpCode);
+                    echo json_encode([
+                        'status' => 'error',
+                        'message' => $resultMessage,
+                        'error_code' => $resultCode
+                    ]);
+                    exit();
+                }
+            } else {
+                // Si falla el procedimiento almacenado, usar método tradicional
+                $useStoredProcedure = false;
+            }
+        } catch (Exception $spException) {
+            // Si hay error con el procedimiento almacenado, usar método tradicional
+            $useStoredProcedure = false;
         }
-        sqlsrv_free_stmt($stmtCheck);
     }
-    
-    // Actualizar datos en tabla Usuarios
-    $queryUpdate = "UPDATE dbo.Usuarios 
-                    SET nombre = ?, correo = ?, cedula = ?, direccion = ?, telefono = ?
-                    WHERE id_usuario = ?";
-    
-    $params = array(
-        $data['nombre'],
-        $data['correo'],
-        $data['cedula'],
-        $data['direccion'],
-        $data['telefono'],
-        $userId
-    );
-    
-    $stmtUpdate = sqlsrv_prepare($conn, $queryUpdate, $params);
-    
-    if (!$stmtUpdate || !sqlsrv_execute($stmtUpdate)) {
-        throw new Exception('Error al actualizar usuario');
+
+    // Método tradicional si el procedimiento almacenado no está disponible
+    if (!$useStoredProcedure) {
+        // Verificar si el email ya existe para otro usuario
+        $queryCheck = "SELECT id_usuario FROM dbo.Usuarios WHERE correo = ? AND id_usuario != ?";
+        $stmtCheck = $database->executeQuery($queryCheck, array($data['correo'], $userId));
+
+        if ($stmtCheck) {
+            if ($database->fetch($stmtCheck)) {
+                $database->freeStatement($stmtCheck);
+                http_response_code(409);
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => 'El correo ya está registrado'
+                ]);
+                exit();
+            }
+            $database->freeStatement($stmtCheck);
+        }
+
+        // Actualizar datos en tabla Usuarios
+        $queryUpdate = "UPDATE dbo.Usuarios 
+                        SET nombre = ?, correo = ?, cedula = ?, direccion = ?, telefono = ?, fecha_actualizacion = GETDATE()
+                        WHERE id_usuario = ?";
+
+        $params = array(
+            $data['nombre'],
+            $data['correo'],
+            $data['cedula'],
+            $data['direccion'],
+            $data['telefono'],
+            $userId
+        );
+
+        $stmtUpdate = $database->executeQuery($queryUpdate, $params);
+
+        if (!$stmtUpdate) {
+            throw new Exception('Error al actualizar usuario');
+        }
+
+        $database->freeStatement($stmtUpdate);
+
+        // Actualizar datos en tabla Clientes
+        $queryUpdateCliente = "UPDATE dbo.Clientes 
+                               SET cedula = ?, direccion = ?, telefono = ?, fecha_actualizacion = GETDATE()
+                               WHERE id_usuario = ?";
+
+        $paramsCliente = array(
+            $data['cedula'],
+            $data['direccion'],
+            $data['telefono'],
+            $userId
+        );
+
+        $stmtUpdateCliente = $database->executeQuery($queryUpdateCliente, $paramsCliente);
+
+        if ($stmtUpdateCliente) {
+            $database->freeStatement($stmtUpdateCliente);
+        }
+
+        // Insertar registro de auditoría manual
+        $auditSQL = "INSERT INTO dbo.Auditoria (id_usuario, accion, detalles, fecha_accion, ip_address) 
+                     VALUES (?, 'UPDATE_PROFILE', ?, GETDATE(), ?)";
+        $auditParams = array(
+            $userId,
+            'Actualización de perfil de usuario: ' . $data['nombre'],
+            $clientIP
+        );
+
+        $stmtAudit = $database->executeQuery($auditSQL, $auditParams);
+        if ($stmtAudit) {
+            $database->freeStatement($stmtAudit);
+        }
+
+        $resultMessage = 'Perfil actualizado correctamente';
     }
-    
-    sqlsrv_free_stmt($stmtUpdate);
-    
-    // Actualizar datos en tabla Clientes
-    $queryUpdateCliente = "UPDATE dbo.Clientes 
-                           SET cedula = ?, direccion = ?, telefono = ?
-                           WHERE id_usuario = ?";
-    
-    $paramsCliente = array(
-        $data['cedula'],
-        $data['direccion'],
-        $data['telefono'],
-        $userId
-    );
-    
-    $stmtUpdateCliente = sqlsrv_prepare($conn, $queryUpdateCliente, $paramsCliente);
-    
-    if ($stmtUpdateCliente) {
-        sqlsrv_execute($stmtUpdateCliente);
-        sqlsrv_free_stmt($stmtUpdateCliente);
-    }
-    
+
     // Actualizar datos de sesión
     $_SESSION['nombre'] = $data['nombre'];
     $_SESSION['correo'] = $data['correo'];
-    
+
     $database->closeConnection();
-    
+
     echo json_encode([
         'status' => 'ok',
-        'message' => 'Perfil actualizado correctamente',
+        'message' => $resultMessage,
         'data' => [
             'nombre' => $data['nombre'],
             'correo' => $data['correo'],
             'cedula' => $data['cedula'],
             'direccion' => $data['direccion'],
             'telefono' => $data['telefono']
-        ]
+        ],
+        'method' => $useStoredProcedure ? 'stored_procedure' : 'traditional'
     ]);
-    
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage()
+        'message' => 'Error interno del servidor'
     ]);
 }

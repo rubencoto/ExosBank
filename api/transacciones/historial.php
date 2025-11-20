@@ -10,7 +10,7 @@ if (preg_match('/^http:\/\/localhost(:\d+)?$/', $origin)) {
 }
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Credentials: true');
 
 // Manejar preflight
@@ -105,10 +105,8 @@ try {
                             t.id_cuenta_origen,
                             t.id_cuenta_destino,
                             t.monto,
-                            t.tipo_transaccion,
-                            t.descripcion,
+                            t.tipo,
                             t.fecha,
-                            t.estado,
                             co.numero_cuenta as cuenta_origen,
                             cd.numero_cuenta as cuenta_destino
                           FROM dbo.Transacciones t
@@ -142,12 +140,12 @@ try {
         $transacciones[] = [
             'id' => $transaccion['id_transaccion'],
             'fecha' => $transaccion['fecha']->format('Y-m-d H:i:s'),
-            'tipo' => $transaccion['tipo_transaccion'],
-            'descripcion' => $transaccion['descripcion'],
+            'tipo' => $transaccion['tipo'],
+            'descripcion' => 'Transferencia', // Campo fijo ya que no existe en la BD
             'origen' => $transaccion['cuenta_origen'] ?? 'Externa',
             'destino' => $transaccion['cuenta_destino'] ?? 'Externa',
             'monto' => floatval($transaccion['monto']),
-            'estado' => $transaccion['estado'],
+            'estado' => 'Completada', // Campo fijo ya que no existe en la BD
             'es_enviada' => $esEnviada,
             'numero_cuenta' => $esEnviada ? $transaccion['cuenta_origen'] : $transaccion['cuenta_destino']
         ];

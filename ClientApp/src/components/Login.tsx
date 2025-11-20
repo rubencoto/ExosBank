@@ -9,67 +9,55 @@ interface LoginProps {
   onRegister?: () => void;
 }
 
+import { useApi } from '../hooks/useApi';
+import { ErrorDisplay } from './common/ErrorDisplay';
+
 export function Login({ onLogin, onRegister }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { post, isLoading, error, clearError } = useApi();
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
+    clearError();
 
     try {
       console.log('Intentando login con:', email);
       
-      const response = await fetch('http://localhost/ExosBank/api/login.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: email,
-          password: password
-        })
+      const data = await post('/api/login.php', {
+        email: email,
+        password: password
       });
 
-      console.log('Respuesta del servidor:', response.status);
+      console.log('Login exitoso:', data);
 
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Datos recibidos:', data);
-
-      if (data.status === 'ok' && data.data) {
+      if (data) {
         // Determinar el rol
-        const role = data.data.rol === 'Administrador' ? 'admin' : 'client';
+        const role = data.rol === 'Administrador' ? 'admin' : 'client';
         
         // Preparar datos del usuario
         const userData = {
-          id: data.data.id_usuario,
-          name: data.data.nombre,
-          email: data.data.correo,
-          role: data.data.rol
+          id: data.id_usuario,
+          nombre: data.nombre,
+          correo: data.correo,
+          rol: data.rol
         };
 
         // Guardar en localStorage
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('isAuthenticated', 'true');
 
+        // Guardar token JWT si está disponible
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+        }
+
         // Llamar al callback de login
         onLogin(role, userData);
-      } else {
-        setError(data.message || 'Credenciales incorrectas');
       }
     } catch (err) {
+      // El error ya está manejado por useApi
       console.error('Error de login:', err);
-      setError('Error de conexión con el servidor. Verifica que Apache esté corriendo.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -114,11 +102,13 @@ export function Login({ onLogin, onRegister }: LoginProps) {
               />
             </div>
 
-            {/* Error Message */}
+            {/* Error Display */}
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center">
-                {error}
-              </div>
+              <ErrorDisplay 
+                error={error} 
+                onDismiss={clearError}
+                className="mb-4"
+              />
             )}
 
             {/* Submit Button */}

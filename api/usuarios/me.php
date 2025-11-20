@@ -10,7 +10,7 @@ if (preg_match('/^http:\/\/localhost(:\d+)?$/', $origin)) {
 }
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Credentials: true');
 
 // Manejar preflight
@@ -26,15 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit();
 }
 
-// Verificar sesión activa
-if (!isset($_SESSION['usuario_id'])) {
-    http_response_code(401);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'No hay sesión activa'
-    ]);
-    exit();
-}
+// Verificar autenticación
+require_once __DIR__ . '/../../config/auth.php';
+$userData = AuthHelper::requireAuth();
 
 require_once __DIR__ . '/../../config/env.php';
 require_once __DIR__ . '/../../config/database.php';
@@ -43,7 +37,7 @@ try {
     $database = new Database();
     $conn = $database->getConnection();
     
-    $userId = $_SESSION['usuario_id'];
+    $userId = $userData['user_id'];
     
     // Obtener datos del usuario
     $query = "SELECT id_usuario, nombre, correo, rol, cedula, direccion, telefono, tipo_cuenta 

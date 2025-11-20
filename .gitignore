@@ -16,6 +16,7 @@ logs/
 node_modules/
 /ClientApp/node_modules/
 /ClientApp/dist/
+/ClientApp/build/
 
 # IDEs
 .vscode/

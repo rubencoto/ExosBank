@@ -44,7 +44,7 @@ require_once __DIR__ . '/../../config/database.php';
 try {
     $database = new Database();
     $conn = $database->getConnection();
-    
+
     // GET - Obtener todas las cuentas
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $query = "SELECT 
@@ -60,13 +60,13 @@ try {
                   INNER JOIN dbo.Clientes cl ON c.id_cliente = cl.id_cliente
                   INNER JOIN dbo.Usuarios u ON cl.id_usuario = u.id_usuario
                   ORDER BY c.id_cuenta DESC";
-        
+
         $stmt = sqlsrv_query($conn, $query);
-        
+
         if (!$stmt) {
-            throw new Exception('Error al obtener cuentas: ' . print_r(sqlsrv_errors(), true));
+            throw new Exception('Error al obtener cuentas');
         }
-        
+
         $cuentas = [];
         while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
             $tipoCuentaNombre = '';
@@ -80,7 +80,7 @@ try {
                 default:
                     $tipoCuentaNombre = 'Desconocido';
             }
-            
+
             $cuentas[] = [
                 'id_cuenta' => $row['id_cuenta'],
                 'numero_cuenta' => $row['numero_cuenta'],
@@ -95,10 +95,10 @@ try {
                 ]
             ];
         }
-        
+
         sqlsrv_free_stmt($stmt);
         $database->closeConnection();
-        
+
         echo json_encode([
             'status' => 'ok',
             'data' => [
@@ -107,26 +107,26 @@ try {
             ]
         ]);
     }
-    
+
     // DELETE - Eliminar una cuenta
     else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         $idCuenta = isset($_GET['id']) ? intval($_GET['id']) : 0;
-        
+
         if ($idCuenta <= 0) {
             throw new Exception('ID de cuenta inválido');
         }
-        
+
         // Verificar que la cuenta existe
         $queryCheck = "SELECT id_cuenta FROM dbo.Cuentas WHERE id_cuenta = ?";
         $stmtCheck = sqlsrv_prepare($conn, $queryCheck, array(&$idCuenta));
-        
+
         if (!$stmtCheck || !sqlsrv_execute($stmtCheck)) {
             throw new Exception('Error al verificar cuenta');
         }
-        
+
         $existe = sqlsrv_fetch_array($stmtCheck, SQLSRV_FETCH_ASSOC);
         sqlsrv_free_stmt($stmtCheck);
-        
+
         if (!$existe) {
             http_response_code(404);
             echo json_encode([
@@ -135,60 +135,57 @@ try {
             ]);
             exit();
         }
-        
+
         // Eliminar la cuenta
         $queryDelete = "DELETE FROM dbo.Cuentas WHERE id_cuenta = ?";
         $stmtDelete = sqlsrv_prepare($conn, $queryDelete, array(&$idCuenta));
-        
+
         if (!$stmtDelete || !sqlsrv_execute($stmtDelete)) {
-            throw new Exception('Error al eliminar cuenta: ' . print_r(sqlsrv_errors(), true));
+            throw new Exception('Error al eliminar cuenta');
         }
-        
+
         sqlsrv_free_stmt($stmtDelete);
         $database->closeConnection();
-        
+
         echo json_encode([
             'status' => 'ok',
             'message' => 'Cuenta eliminada exitosamente'
         ]);
     }
-    
+
     // PUT - Actualizar saldo de cuenta
     else if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $input = file_get_contents('php://input');
         $data = json_decode($input, true);
-        
+
         if (!isset($data['id_cuenta']) || !isset($data['saldo'])) {
             throw new Exception('Datos incompletos');
         }
-        
+
         $idCuenta = intval($data['id_cuenta']);
         $nuevoSaldo = floatval($data['saldo']);
-        
+
         $queryUpdate = "UPDATE dbo.Cuentas SET saldo = ? WHERE id_cuenta = ?";
         $stmtUpdate = sqlsrv_prepare($conn, $queryUpdate, array(&$nuevoSaldo, &$idCuenta));
-        
+
         if (!$stmtUpdate || !sqlsrv_execute($stmtUpdate)) {
-            throw new Exception('Error al actualizar saldo: ' . print_r(sqlsrv_errors(), true));
+            throw new Exception('Error al actualizar saldo');
         }
-        
+
         sqlsrv_free_stmt($stmtUpdate);
         $database->closeConnection();
-        
+
         echo json_encode([
             'status' => 'ok',
             'message' => 'Saldo actualizado exitosamente'
         ]);
-    }
-    
-    else {
+    } else {
         http_response_code(405);
         echo json_encode([
             'status' => 'error',
             'message' => 'Método no permitido'
         ]);
     }
-    
 } catch (Exception $e) {
     error_log('Error en admin/cuentas.php: ' . $e->getMessage());
     http_response_code(500);

@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { mockAccounts } from '../../lib/mockData';
-import { CreditCard, TrendingUp } from 'lucide-react';
+import { CreditCard, TrendingUp, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/button';
+import { authenticatedFetch } from '../../lib/auth';
 
 interface ClientOverviewProps {
   clientId: number;
@@ -9,29 +10,119 @@ interface ClientOverviewProps {
 }
 
 export function ClientOverview({ clientId, onNavigate }: ClientOverviewProps) {
-  const clientAccounts = mockAccounts.filter(a => a.clientId === clientId);
-  const totalBalance = clientAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+  interface CuentaResumen {
+    id_cuenta: number;
+    numero_cuenta: string;
+    tipo_cuenta: number;
+    saldo: number;
+  }
 
-  const getAccountConfig = (type: string) => {
+  const [accounts, setAccounts] = useState<CuentaResumen[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const response = await authenticatedFetch('/api/usuarios/cuentas.php');
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Error al obtener cuentas');
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'ok' && data.data?.cuentas) {
+          setAccounts(data.data.cuentas);
+        } else {
+          throw new Error(data.message || 'No se pudieron cargar las cuentas');
+        }
+      } catch (err) {
+        console.error('Error al cargar resumen de cuentas:', err);
+        setError(err instanceof Error ? err.message : 'Error de conexión');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAccounts();
+  }, [clientId]);
+
+  const totalBalance = accounts.reduce((sum, acc) => sum + acc.saldo, 0);
+
+  const getAccountConfig = (type: number) => {
     const configs = {
-      debit: {
+      1: {
         color: 'from-emerald-500 to-emerald-600',
-        label: 'Débito',
+        label: 'Corriente',
         subtitle: 'Cuenta Corriente'
       },
-      savings: {
+      2: {
         color: 'from-blue-500 to-blue-600',
         label: 'Ahorro',
         subtitle: 'Cuenta de Ahorros'
       },
-      credit: {
+      3: {
         color: 'from-red-500 to-red-600',
         label: 'Crédito',
         subtitle: 'Cuenta de Crédito'
-      },
+      }
     };
-    return configs[type as keyof typeof configs] || configs.debit;
+    return configs[type as keyof typeof configs] || configs[1];
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4" />
+          <p className="text-muted-foreground">Cargando resumen de cuentas...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">Resumen de Cuentas</h2>
+          <p className="text-muted-foreground">No pudimos obtener la información en este momento.</p>
+        </div>
+        <Card className="shadow-md border-red-200">
+          <CardContent className="pt-6 text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="rounded-full bg-red-100 p-3">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Button onClick={() => window.location.reload()}>Reintentar</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">Resumen de Cuentas</h2>
+          <p className="text-muted-foreground">Aún no tienes cuentas activas.</p>
+        </div>
+        <Card className="shadow-md">
+          <CardContent className="pt-6 text-center">
+            <p className="text-muted-foreground">Contacta a un administrador para crear tu primera cuenta.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -49,18 +140,18 @@ export function ClientOverview({ clientId, onNavigate }: ClientOverviewProps) {
           </div>
           <div className="flex items-center gap-2 text-emerald-400">
             <TrendingUp className="h-4 w-4" />
-            <span className="text-sm">Entre {clientAccounts.length} cuentas</span>
+            <span className="text-sm">Entre {accounts.length} cuentas</span>
           </div>
         </CardContent>
       </Card>
 
       {/* Accounts Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {clientAccounts.map((account) => {
-          const config = getAccountConfig(account.type);
+        {accounts.map((account) => {
+          const config = getAccountConfig(account.tipo_cuenta);
           return (
             <Card
-              key={account.id}
+              key={account.id_cuenta}
               className={`shadow-md overflow-hidden border-0 bg-gradient-to-br ${config.color} text-white`}
             >
               <CardContent className="p-6">
@@ -75,9 +166,9 @@ export function ClientOverview({ clientId, onNavigate }: ClientOverviewProps) {
                 </div>
                 <div className="space-y-2 mt-6">
                   <p className="text-3xl font-bold">
-                    ${account.balance.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${account.saldo.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
-                  <p className="text-sm font-mono opacity-90">{account.accountNumber}</p>
+                  <p className="text-sm font-mono opacity-90">{account.numero_cuenta}</p>
                 </div>
               </CardContent>
             </Card>

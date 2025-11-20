@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, CreditCard, ArrowLeftRight, Shield, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, ArrowLeftRight, Shield, Settings, LogOut, FileBarChart, Activity } from 'lucide-react';
 import { AdminOverview } from './admin/AdminOverview';
 import { UsersManagement } from './admin/UsersManagement';
 import { AccountsManagement } from './admin/AccountsManagement';
 import { SecurityRoles } from './admin/SecurityRoles';
-import exosLogo from 'figma:asset/f64e73f4c248a8bf63bd9ade8025b7b28f3a7d8a.png';
+import { SystemSettings } from './admin/SystemSettings';
+import { Reports } from './admin/Reports';
+import { AuditLog } from './admin/AuditLog';
 
 interface AdminDashboardProps {
   userData: any;
   onLogout: () => void;
 }
 
-type AdminView = 'dashboard' | 'users' | 'accounts' | 'security' | 'settings';
+type AdminView = 'dashboard' | 'users' | 'accounts' | 'security' | 'settings' | 'reports' | 'audit';
 
 export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -20,7 +22,9 @@ export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
     { id: 'dashboard' as AdminView, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users' as AdminView, label: 'Usuarios', icon: Users },
     { id: 'accounts' as AdminView, label: 'Cuentas', icon: CreditCard },
+    { id: 'reports' as AdminView, label: 'Reportes', icon: FileBarChart },
     { id: 'security' as AdminView, label: 'Seguridad', icon: Shield },
+    { id: 'audit' as AdminView, label: 'Auditoría', icon: Activity },
     { id: 'settings' as AdminView, label: 'Configuración', icon: Settings },
   ];
 
@@ -29,8 +33,9 @@ export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
       {/* Sidebar */}
       <div className="w-64 bg-[#0B132B] text-white flex flex-col shadow-xl">
         {/* Logo */}
-        <div className="p-6 border-b border-[#1C2541]">
-          <img src={exosLogo} alt="EXOS Bank" className="h-16 object-contain mx-auto" />
+        <div className="p-6 border-b border-[#1C2541] text-center">
+          <h1 className="text-2xl font-bold text-white">EXOS Bank</h1>
+          <p className="text-sm text-gray-300 mt-1">Admin Panel</p>
         </div>
 
         {/* Navigation */}
@@ -77,19 +82,10 @@ export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
           {currentView === 'dashboard' && <AdminOverview />}
           {currentView === 'users' && <UsersManagement />}
           {currentView === 'accounts' && <AccountsManagement />}
+          {currentView === 'reports' && <Reports />}
           {currentView === 'security' && <SecurityRoles />}
-          {currentView === 'settings' && (
-            <div className="space-y-6">
-              <div>
-                <h2>Configuración</h2>
-                <p className="text-muted-foreground">Ajustes del sistema</p>
-              </div>
-              <div className="bg-white p-8 rounded-lg shadow-md text-center">
-                <Settings className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-600">Módulo de configuración en desarrollo</p>
-              </div>
-            </div>
-          )}
+          {currentView === 'audit' && <AuditLog />}
+          {currentView === 'settings' && <SystemSettings />}
         </div>
       </div>
     </div>

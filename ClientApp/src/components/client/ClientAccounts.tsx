@@ -25,7 +25,7 @@ export function ClientAccounts({ clientId }: ClientAccountsProps) {
 
   const fetchCuentas = async () => {
     try {
-      const response = await fetch('http://localhost/ExosBank/api/usuarios/cuentas.php', {
+      const response = await fetch('/api/usuarios/cuentas.php', {
         credentials: 'include'
       });
 

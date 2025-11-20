@@ -52,7 +52,7 @@ export function ClientHistory({ clientId }: ClientHistoryProps) {
 
   const fetchHistorial = async () => {
     try {
-      const response = await fetch('http://localhost/ExosBank/api/transacciones/historial.php', {
+      const response = await fetch('/api/transacciones/historial.php', {
         credentials: 'include'
       });
 

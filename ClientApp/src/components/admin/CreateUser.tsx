@@ -1,11 +1,29 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Button } from '../ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { Eye, EyeOff, Building2 } from 'lucide-react';
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Button } from "../ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Eye, EyeOff, Building2 } from "lucide-react";
 
 interface FormData {
   fullName: string;
@@ -34,20 +52,20 @@ interface CreateUserProps {
 
 export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
   const [formData, setFormData] = useState<FormData>({
-    fullName: '',
-    email: '',
-    password: '',
-    role: '',
-    phone: '',
-    address: '',
-    cedula: '',
+    fullName: "",
+    email: "",
+    password: "",
+    role: "",
+    phone: "",
+    address: "",
+    cedula: "",
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState("");
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -68,39 +86,39 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
     const newErrors: FormErrors = {};
 
     if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Este campo es requerido';
+      newErrors.fullName = "Este campo es requerido";
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = 'Este campo es requerido';
+      newErrors.email = "Este campo es requerido";
     } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Correo electrónico inválido';
+      newErrors.email = "Correo electrónico inválido";
     }
 
     if (!formData.password) {
-      newErrors.password = 'Este campo es requerido';
+      newErrors.password = "Este campo es requerido";
     } else if (formData.password.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+      newErrors.password = "La contraseña debe tener al menos 6 caracteres";
     }
 
     if (!formData.role) {
-      newErrors.role = 'Debe seleccionar un rol';
+      newErrors.role = "Debe seleccionar un rol";
     }
 
     if (!formData.phone.trim()) {
-      newErrors.phone = 'Este campo es requerido';
+      newErrors.phone = "Este campo es requerido";
     } else if (!validatePhone(formData.phone)) {
-      newErrors.phone = 'Formato inválido. Use: +506 8234 5678';
+      newErrors.phone = "Formato inválido. Use: +506 8234 5678";
     }
 
     if (!formData.address.trim()) {
-      newErrors.address = 'Este campo es requerido';
+      newErrors.address = "Este campo es requerido";
     }
 
     if (!formData.cedula.trim()) {
-      newErrors.cedula = 'Este campo es requerido';
+      newErrors.cedula = "Este campo es requerido";
     } else if (!validateCedula(formData.cedula)) {
-      newErrors.cedula = 'Formato inválido. Use: 1-0000-0000';
+      newErrors.cedula = "Formato inválido. Use: 1-0000-0000";
     }
 
     setErrors(newErrors);
@@ -108,7 +126,7 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,37 +135,56 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
     }
 
     setIsSubmitting(true);
-    setSubmitError('');
+    setSubmitError("");
 
     try {
-      const response = await fetch('http://localhost/ExosBank/api/usuarios/create.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          nombre: formData.fullName,
-          correo: formData.email,
-          contrasena: formData.password,
-          rol: formData.role === 'admin' ? 'Administrador' : 'Cliente',
-          telefono: formData.phone,
-          cedula: formData.cedula,
-          direccion: formData.address,
-          tipo_cuenta: '1' // Por defecto cuenta corriente
-        })
-      });
+      const response = await fetch(
+        "http://localhost/ExosBank/api/usuarios/create.php",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            nombre: formData.fullName,
+            correo: formData.email,
+            contrasena: formData.password,
+            rol: formData.role, // Enviar directamente 'admin' o 'client'
+            telefono: formData.phone,
+            cedula: formData.cedula,
+            direccion: formData.address,
+            tipo_cuenta: 1, // Tipo numérico para débito por defecto
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (response.ok && data.success) {
         setIsSuccessModalOpen(true);
       } else {
-        setSubmitError(data.message || 'Error al crear el usuario');
+        // Manejar errores específicos
+        let errorMessage = data.message || "Error al crear el usuario";
+
+        if (response.status === 403) {
+          errorMessage =
+            "No tienes permisos para crear usuarios. Inicia sesión como administrador.";
+        } else if (response.status === 409) {
+          errorMessage =
+            data.message || "El correo o cédula ya están registrados.";
+        } else if (response.status === 500) {
+          errorMessage =
+            "Error interno del servidor. Contacta al administrador del sistema.";
+        }
+
+        setSubmitError(errorMessage);
       }
     } catch (error) {
-      console.error('Error al crear usuario:', error);
-      setSubmitError('Error de conexión. Verifica que Apache esté corriendo.');
+      console.error("Error al crear usuario:", error);
+      setSubmitError(
+        "Error de conexión. Verifica que Apache esté corriendo y que tengas acceso a internet."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -161,13 +198,13 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
     setIsSuccessModalOpen(false);
     // Reset form
     setFormData({
-      fullName: '',
-      email: '',
-      password: '',
-      role: '',
-      phone: '',
-      address: '',
-      cedula: '',
+      fullName: "",
+      email: "",
+      password: "",
+      role: "",
+      phone: "",
+      address: "",
+      cedula: "",
     });
     setErrors({});
     // Volver a la lista de usuarios
@@ -182,7 +219,8 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
           <div>
             <h1 className="mb-2">Crear Nuevo Usuario</h1>
             <p className="text-muted-foreground">
-              Complete la información del nuevo usuario para registrarlo en el sistema.
+              Complete la información del nuevo usuario para registrarlo en el
+              sistema.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-md">
@@ -197,9 +235,7 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
         <Card className="shadow-lg border-0">
           <CardHeader>
             <CardTitle>Información del Usuario</CardTitle>
-            <CardDescription>
-              Todos los campos son obligatorios
-            </CardDescription>
+            <CardDescription>Todos los campos son obligatorios</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -216,10 +252,12 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                       setFormData({ ...formData, fullName: e.target.value });
                       setErrors({ ...errors, fullName: undefined });
                     }}
-                    className={errors.fullName ? 'border-destructive' : ''}
+                    className={errors.fullName ? "border-destructive" : ""}
                   />
                   {errors.fullName && (
-                    <p className="text-destructive text-sm">{errors.fullName}</p>
+                    <p className="text-destructive text-sm">
+                      {errors.fullName}
+                    </p>
                   )}
                 </div>
 
@@ -235,7 +273,7 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                       setFormData({ ...formData, email: e.target.value });
                       setErrors({ ...errors, email: undefined });
                     }}
-                    className={errors.email ? 'border-destructive' : ''}
+                    className={errors.email ? "border-destructive" : ""}
                   />
                   {errors.email && (
                     <p className="text-destructive text-sm">{errors.email}</p>
@@ -248,14 +286,16 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                   <div className="relative">
                     <Input
                       id="password"
-                      type={showPassword ? 'text' : 'password'}
+                      type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={(e) => {
                         setFormData({ ...formData, password: e.target.value });
                         setErrors({ ...errors, password: undefined });
                       }}
-                      className={errors.password ? 'border-destructive pr-10' : 'pr-10'}
+                      className={
+                        errors.password ? "border-destructive pr-10" : "pr-10"
+                      }
                     />
                     <button
                       type="button"
@@ -270,7 +310,9 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                     </button>
                   </div>
                   {errors.password && (
-                    <p className="text-destructive text-sm">{errors.password}</p>
+                    <p className="text-destructive text-sm">
+                      {errors.password}
+                    </p>
                   )}
                 </div>
 
@@ -284,7 +326,9 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                       setErrors({ ...errors, role: undefined });
                     }}
                   >
-                    <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
+                    <SelectTrigger
+                      className={errors.role ? "border-destructive" : ""}
+                    >
                       <SelectValue placeholder="Seleccione un rol" />
                     </SelectTrigger>
                     <SelectContent>
@@ -308,7 +352,7 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                       setFormData({ ...formData, phone: e.target.value });
                       setErrors({ ...errors, phone: undefined });
                     }}
-                    className={errors.phone ? 'border-destructive' : ''}
+                    className={errors.phone ? "border-destructive" : ""}
                   />
                   {errors.phone && (
                     <p className="text-destructive text-sm">{errors.phone}</p>
@@ -326,7 +370,7 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                       setFormData({ ...formData, cedula: e.target.value });
                       setErrors({ ...errors, cedula: undefined });
                     }}
-                    className={errors.cedula ? 'border-destructive' : ''}
+                    className={errors.cedula ? "border-destructive" : ""}
                   />
                   {errors.cedula && (
                     <p className="text-destructive text-sm">{errors.cedula}</p>
@@ -345,12 +389,20 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                     setFormData({ ...formData, address: e.target.value });
                     setErrors({ ...errors, address: undefined });
                   }}
-                  className={errors.address ? 'border-destructive' : ''}
+                  className={errors.address ? "border-destructive" : ""}
                 />
                 {errors.address && (
                   <p className="text-destructive text-sm">{errors.address}</p>
                 )}
               </div>
+
+              {/* Error de envío */}
+              {submitError && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-800 text-sm font-medium">❌ Error</p>
+                  <p className="text-red-700 text-sm mt-1">{submitError}</p>
+                </div>
+              )}
 
               {/* Botones */}
               <div className="flex gap-4 pt-4">
@@ -359,7 +411,7 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
                   className="flex-1 bg-[#3b82f6] hover:bg-[#2563eb]"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'Guardando...' : 'Guardar usuario'}
+                  {isSubmitting ? "Guardando..." : "Guardar usuario"}
                 </Button>
                 <Button
                   type="button"
@@ -391,7 +443,8 @@ export function CreateUser({ onCancel, onSuccess }: CreateUserProps) {
               ¡Usuario creado exitosamente!
             </DialogTitle>
             <DialogDescription className="text-center pt-4">
-              El usuario <strong>{formData.fullName}</strong> ha sido registrado en el sistema.
+              El usuario <strong>{formData.fullName}</strong> ha sido registrado
+              en el sistema.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center pt-4">
