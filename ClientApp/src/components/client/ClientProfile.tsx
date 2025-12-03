@@ -34,6 +34,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
 
   // Estados para cambio de contraseña
   const [currentPassword, setCurrentPassword] = useState("");
@@ -130,11 +131,17 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
       if (data.status === "ok") {
         toast.success("Perfil actualizado correctamente");
         setUserData((prev) => (prev ? { ...prev, ...data.data } : null));
+        setIsEditing(false);
+        // Refrescar datos del servidor
+        await fetchUserData();
       } else {
+        toast.error(data.message || "Error al actualizar perfil");
         setError(data.message || "Error al actualizar perfil");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error de conexión");
+      const errorMsg = err instanceof Error ? err.message : "Error de conexión";
+      toast.error(errorMsg);
+      setError(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -205,11 +212,47 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
         {/* Profile Form */}
         <div className="lg:col-span-2">
           <Card className="shadow-md">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Información Personal</CardTitle>
+              <div className="flex gap-2">
+                {!isEditing ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-[#0B132B] hover:bg-[#1C2541]"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    Editar Información
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditing(false);
+                        fetchUserData();
+                      }}
+                      disabled={saving}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="bg-[#0B132B] hover:bg-[#1C2541]"
+                      disabled={saving}
+                      form="profile-form"
+                    >
+                      {saving ? "Guardando..." : "Guardar Cambios"}
+                    </Button>
+                  </>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSaveProfile} className="space-y-6">
+              <form id="profile-form" onSubmit={handleSaveProfile} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Nombre completo</Label>
@@ -221,6 +264,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
                         defaultValue={userData.nombre}
                         className="pl-10"
                         required
+                        disabled={!isEditing}
                       />
                     </div>
                   </div>
@@ -235,6 +279,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
                         defaultValue={userData.cedula}
                         className="pl-10"
                         required
+                        disabled={!isEditing}
                       />
                     </div>
                   </div>
@@ -251,6 +296,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
                       defaultValue={userData.correo}
                       className="pl-10"
                       required
+                      disabled={!isEditing}
                     />
                   </div>
                 </div>
@@ -265,6 +311,7 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
                       defaultValue={userData.telefono}
                       className="pl-10"
                       required
+                      disabled={!isEditing}
                     />
                   </div>
                 </div>
@@ -279,17 +326,10 @@ export function ClientProfile({ clientId }: ClientProfileProps) {
                       defaultValue={userData.direccion}
                       className="pl-10"
                       required
+                      disabled={!isEditing}
                     />
                   </div>
                 </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-[#0B132B] hover:bg-[#1C2541]"
-                  disabled={saving}
-                >
-                  {saving ? "Guardando..." : "Guardar Cambios"}
-                </Button>
               </form>
             </CardContent>
           </Card>

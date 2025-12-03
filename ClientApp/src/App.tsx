@@ -23,15 +23,11 @@ export default function App() {
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restaurar sesión al cargar la aplicación
+  // Limpiar sesión al cargar la aplicación para siempre mostrar login
   useEffect(() => {
-    const storedUserData = getStoredUserData();
-    if (storedUserData) {
-      setUserData(storedUserData);
-      // Determinar la vista basada en el rol
-      const role = storedUserData.rol === 'Administrador' ? 'admin' : 'client';
-      setCurrentView(role);
-    }
+    clearAuthData();
+    setCurrentView("login");
+    setUserData(null);
     setIsLoading(false);
   }, []);
 

@@ -141,11 +141,18 @@ try {
             throw new DatabaseQueryException('No se pudo obtener la información de la cuenta creada.');
         }
 
-        // Registrar en auditoría (opcional)
-        $queryAuditoria = "INSERT INTO dbo.Auditoria (id_usuario, accion, tabla_afectada, fecha_hora, descripcion)
-                           VALUES (?, ?, ?, GETDATE(), ?)";
-        $descripcionAuditoria = "Cliente solicitó cuenta adicional. Cuenta: {$numeroCuenta}, Tipo: {$tipo_cuenta}";
-        $paramsAuditoria = [$userId, 'INSERT', 'Cuentas', $descripcionAuditoria];
+        // Registrar en auditoría
+        $clientIP = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+        $queryAuditoria = "INSERT INTO dbo.Auditoria (id_usuario, accion, tabla_afectada, id_registro_afectado, 
+                           datos_nuevos, ip_usuario, user_agent, fecha_evento)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())";
+        $datosNuevos = json_encode([
+            'numero_cuenta' => $numeroCuenta,
+            'tipo_cuenta' => $tipo_cuenta == 1 ? 'Corriente' : 'Ahorro',
+            'saldo' => $saldoInicial
+        ]);
+        $paramsAuditoria = [$userId, 'INSERT', 'Cuentas', $nuevaCuenta['id_cuenta'], $datosNuevos, $clientIP, $userAgent];
         $stmtAuditoria = $database->executeQuery($queryAuditoria, $paramsAuditoria);
         if ($stmtAuditoria) {
             sqlsrv_free_stmt($stmtAuditoria);
