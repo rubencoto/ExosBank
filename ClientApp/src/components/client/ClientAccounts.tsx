@@ -1,7 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import { Plus, CheckCircle2 } from 'lucide-react';
 
 interface ClientAccountsProps {
   clientId: number;
@@ -18,10 +24,33 @@ export function ClientAccounts({ clientId }: ClientAccountsProps) {
   const [cuentas, setCuentas] = useState<CuentaBancaria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showNewAccountModal, setShowNewAccountModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [selectedAccountType, setSelectedAccountType] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [userInfo, setUserInfo] = useState<any>(null);
 
   useEffect(() => {
     fetchCuentas();
+    fetchUserInfo();
   }, [clientId]);
+
+  const fetchUserInfo = async () => {
+    try {
+      const response = await fetch('/api/usuarios/me.php', {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'ok') {
+          setUserInfo(data.data);
+        }
+      }
+    } catch (err) {
+      console.error('Error al cargar información del usuario:', err);
+    }
+  };
 
   const fetchCuentas = async () => {
     try {
@@ -71,6 +100,48 @@ export function ClientAccounts({ clientId }: ClientAccountsProps) {
       return `${numero.slice(0, 4)}-${numero.slice(4, 8)}-${numero.slice(8)}`;
     }
     return numero;
+  };
+
+  const handleRequestNewAccount = async () => {
+    if (!selectedAccountType) {
+      toast.error('Por favor selecciona un tipo de cuenta');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/usuarios/solicitar-cuenta.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          tipo_cuenta: parseInt(selectedAccountType)
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setShowNewAccountModal(false);
+        setShowSuccessModal(true);
+        setSelectedAccountType('');
+        
+        // Recargar cuentas después de 2 segundos
+        setTimeout(() => {
+          fetchCuentas();
+          setShowSuccessModal(false);
+        }, 2000);
+      } else {
+        toast.error(data.message || 'Error al solicitar la cuenta');
+      }
+    } catch (err) {
+      console.error('Error al solicitar cuenta:', err);
+      toast.error('Error de conexión al solicitar la cuenta');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -148,9 +219,18 @@ export function ClientAccounts({ clientId }: ClientAccountsProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2>Mis Cuentas</h2>
-        <p className="text-muted-foreground">Administra tus cuentas bancarias</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2>Mis Cuentas</h2>
+          <p className="text-muted-foreground">Administra tus cuentas bancarias</p>
+        </div>
+        <Button 
+          onClick={() => setShowNewAccountModal(true)}
+          className="bg-[#0B132B] hover:bg-[#1C2541]"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Solicitar Cuenta Adicional
+        </Button>
       </div>
 
       {/* Resumen de cuentas */}
@@ -238,6 +318,131 @@ export function ClientAccounts({ clientId }: ClientAccountsProps) {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Modal para solicitar nueva cuenta */}
+      <Dialog open={showNewAccountModal} onOpenChange={setShowNewAccountModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Solicitar Cuenta Adicional</DialogTitle>
+            <DialogDescription>
+              Completa la información para solicitar una nueva cuenta bancaria
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Información del usuario (precargada y no editable) */}
+            <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-sm text-gray-700">Datos del Titular</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-gray-600">Nombre Completo</Label>
+                  <p className="text-sm font-medium mt-1">{userInfo?.nombre || 'Cargando...'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Cédula</Label>
+                  <p className="text-sm font-medium mt-1">{userInfo?.cedula || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Correo Electrónico</Label>
+                  <p className="text-sm font-medium mt-1">{userInfo?.correo || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Teléfono</Label>
+                  <p className="text-sm font-medium mt-1">{userInfo?.telefono || 'N/A'}</p>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-xs text-gray-600">Dirección</Label>
+                <p className="text-sm font-medium mt-1">{userInfo?.direccion || 'N/A'}</p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-emerald-600 mt-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Datos verificados automáticamente</span>
+              </div>
+            </div>
+
+            {/* Selección de tipo de cuenta */}
+            <div className="space-y-2">
+              <Label htmlFor="tipo_cuenta">
+                Tipo de Cuenta <span className="text-red-500">*</span>
+              </Label>
+              <Select value={selectedAccountType} onValueChange={setSelectedAccountType}>
+                <SelectTrigger id="tipo_cuenta">
+                  <SelectValue placeholder="Selecciona el tipo de cuenta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">
+                    <div className="flex items-center gap-2">
+                      <span>💳</span>
+                      <span>Cuenta Corriente</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="2">
+                    <div className="flex items-center gap-2">
+                      <span>🏦</span>
+                      <span>Cuenta de Ahorro</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {selectedAccountType === '1' && '💡 Ideal para movimientos frecuentes y pagos diarios'}
+                {selectedAccountType === '2' && '💡 Perfecta para guardar dinero y generar intereses'}
+              </p>
+            </div>
+
+            {/* Nota informativa */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-800">
+                <strong>ℹ️ Nota:</strong> Tu solicitud será procesada automáticamente y tu nueva cuenta 
+                estará disponible de inmediato con un saldo inicial de ₡0.00
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowNewAccountModal(false);
+                setSelectedAccountType('');
+              }}
+              disabled={submitting}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleRequestNewAccount}
+              disabled={!selectedAccountType || submitting}
+              className="flex-1 bg-[#0B132B] hover:bg-[#1C2541]"
+            >
+              {submitting ? 'Procesando...' : 'Confirmar Solicitud'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de éxito */}
+      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+        <DialogContent className="sm:max-w-[400px]">
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <div className="rounded-full bg-emerald-100 p-3">
+              <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-2xl mb-2">¡Cuenta Creada!</DialogTitle>
+              <DialogDescription className="text-base">
+                Tu nueva cuenta ha sido creada exitosamente y ya está disponible para usar.
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
