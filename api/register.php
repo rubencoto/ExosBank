@@ -42,7 +42,7 @@ try {
     }
 
     // Validar campos requeridos
-    $requiredFields = ['nombre', 'correo', 'cedula', 'direccion', 'telefono', 'tipo_cuenta', 'username', 'password'];
+    $requiredFields = ['nombre', 'correo', 'cedula', 'direccion', 'telefono', 'tipo_cuenta', 'password'];
     $missingFields = [];
 
     foreach ($requiredFields as $field) {
@@ -62,7 +62,6 @@ try {
     $direccion = trim($data['direccion']);
     $telefono = trim($data['telefono']);
     $tipo_cuenta = trim($data['tipo_cuenta']);
-    $username = trim($data['username']);
     $password = $data['password'];
 
     // Validar formato de correo
@@ -86,96 +85,71 @@ try {
     $database = new Database();
     $conn = $database->getConnection();
 
-    // Verificar si el correo ya está registrado
-    $sqlCheckEmail = "SELECT COUNT(*) as count FROM dbo.Usuarios WHERE correo = ?";
-    $stmtCheck = sqlsrv_prepare($conn, $sqlCheckEmail, array(&$correo));
-
-    if (!$stmtCheck || !sqlsrv_execute($stmtCheck)) {
-        throw new Exception('Error al verificar correo');
+    // Llamar al procedimiento almacenado (sin username)
+    $sql = "{CALL dbo.sp_registrar_usuario_cliente(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    
+    $resultado = 0;
+    $mensaje = '';
+    $idUsuario = 0;
+    $idCliente = 0;
+    $numeroCuenta = '';
+    
+    $params = [
+        $nombre,
+        $correo,
+        $cedula,
+        $direccion,
+        $telefono,
+        intval($tipo_cuenta),
+        $passwordHash,
+        $rol,
+        0.00, // saldo inicial
+        array(&$resultado, SQLSRV_PARAM_OUT),
+        array(&$mensaje, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+        array(&$idUsuario, SQLSRV_PARAM_OUT),
+        array(&$idCliente, SQLSRV_PARAM_OUT),
+        array(&$numeroCuenta, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR))
+    ];
+    
+    $stmt = sqlsrv_query($conn, $sql, $params);
+    
+    if (!$stmt) {
+        $errors = sqlsrv_errors();
+        $errorMsg = is_array($errors) && !empty($errors) ? $errors[0]['message'] : 'Error desconocido';
+        throw new Exception('Error ejecutando procedimiento almacenado: ' . $errorMsg);
     }
-
-    $row = sqlsrv_fetch_array($stmtCheck, SQLSRV_FETCH_ASSOC);
-    if ($row['count'] > 0) {
-        sqlsrv_free_stmt($stmtCheck);
+    
+    // Procesar todos los result sets para que los OUTPUT params se llenen
+    while (sqlsrv_next_result($stmt) !== null) {
+        // Continuar procesando hasta que no haya más result sets
+    }
+    
+    // Los valores de salida ya están en las variables por referencia
+    // $resultado, $mensaje, $idUsuario, $idCliente, $numeroCuenta ya tienen los valores
+    
+    sqlsrv_free_stmt($stmt);
+    
+    // Verificar resultado
+    if ($resultado !== 0) {
         $database->closeConnection();
-        http_response_code(409);
+        
+        // Mapear códigos de error
+        $httpCode = ($resultado === -2 || $resultado === -3) ? 409 : 400;
+        http_response_code($httpCode);
         echo json_encode([
             'status' => 'error',
-            'message' => 'El correo electrónico ya está registrado'
+            'message' => $mensaje
         ]);
         exit();
     }
-    sqlsrv_free_stmt($stmtCheck);
-
-    // Verificar username duplicado
-    $sqlCheckUsername = "SELECT COUNT(*) as count FROM dbo.Usuarios WHERE correo = ?";
-
-    // Insertar usuario con OUTPUT
-    $sqlInsert = "INSERT INTO dbo.Usuarios (nombre, correo, contrasena, rol, cedula, direccion, telefono, tipo_cuenta) 
-                  OUTPUT INSERTED.id_usuario
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-    $params = array($nombre, $correo, $passwordHash, $rol, $cedula, $direccion, $telefono, $tipo_cuenta);
-    $stmtInsert = sqlsrv_prepare($conn, $sqlInsert, $params);
-
-    if (!$stmtInsert || !sqlsrv_execute($stmtInsert)) {
-        throw new Exception('Error al crear usuario');
-    }
-
-    // Obtener el ID del usuario recién creado
-    $idRow = sqlsrv_fetch_array($stmtInsert, SQLSRV_FETCH_ASSOC);
-    $idUsuario = $idRow['id_usuario'];
-
-    if (!$idUsuario) {
-        throw new Exception('No se pudo obtener el ID del usuario creado');
-    }
-
-    sqlsrv_free_stmt($stmtInsert);
-
-    // Crear registro en tabla Clientes con OUTPUT
-    $sqlCliente = "INSERT INTO dbo.Clientes (id_usuario, cedula, direccion, telefono) 
-                   OUTPUT INSERTED.id_cliente
-                   VALUES (?, ?, ?, ?)";
-    $paramsCliente = array($idUsuario, $cedula, $direccion, $telefono);
-    $stmtCliente = sqlsrv_prepare($conn, $sqlCliente, $paramsCliente);
-
-    if (!$stmtCliente || !sqlsrv_execute($stmtCliente)) {
-        throw new Exception('Error al crear cliente');
-    }
-
-    // Obtener el id_cliente recién creado
-    $idClienteRow = sqlsrv_fetch_array($stmtCliente, SQLSRV_FETCH_ASSOC);
-    $idCliente = $idClienteRow['id_cliente'];
-
-    if (!$idCliente) {
-        throw new Exception('No se pudo obtener el ID del cliente creado');
-    }
-
-    sqlsrv_free_stmt($stmtCliente);
-
-    // Generar número de cuenta de 11 dígitos donde el último dígito indica el tipo
-    // Formato: 10 dígitos aleatorios + 1 dígito del tipo de cuenta
-    // Ejemplo: 12345678901 (tipo 1 = Corriente), 12345678902 (tipo 2 = Ahorro), 12345678903 (tipo 3 = Crédito)
-    $random10 = str_pad(rand(0, 9999999999), 10, '0', STR_PAD_LEFT);
-    $numeroCuenta = $random10 . $tipo_cuenta; // 10 dígitos random + 1 dígito tipo
-
-    // Crear cuenta bancaria
-    $sqlCuenta = "INSERT INTO dbo.Cuentas (id_cliente, numero_cuenta, tipo_cuenta, saldo) 
-                  VALUES (?, ?, ?, 0.00)";
-    $paramsCuenta = array($idCliente, $numeroCuenta, intval($tipo_cuenta));
-    $stmtCuenta = sqlsrv_prepare($conn, $sqlCuenta, $paramsCuenta);
-
-    if (!$stmtCuenta || !sqlsrv_execute($stmtCuenta)) {
-        throw new Exception('Error al crear cuenta');
-    }
-
-    sqlsrv_free_stmt($stmtCuenta);
 
     // Enviar notificación de cuenta creada
     try {
-        require_once __DIR__ . '/../Services/NotificationService.php';
-        $notificationService = new NotificationService();
-        $notificationService->notificarCuentaCreada($idCliente, $numeroCuenta, intval($tipo_cuenta));
+        if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+            require_once __DIR__ . '/../Services/NotificationService.php';
+            $notificationService = new NotificationService();
+            $notificationService->notificarCuentaCreada($idCliente, $numeroCuenta, intval($tipo_cuenta));
+        }
     } catch (Exception $notifError) {
         error_log('Error enviando notificación de cuenta creada: ' . $notifError->getMessage());
         // No fallar el registro si la notificación falla

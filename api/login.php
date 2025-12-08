@@ -55,18 +55,46 @@ try {
     $database = new Database();
     $conn = $database->getConnection();
 
-    // Buscar usuario por email
-    $sql = "SELECT id_usuario, nombre, correo, contrasena, rol FROM dbo.Usuarios WHERE correo = ?";
-    $stmt = sqlsrv_prepare($conn, $sql, array(&$email));
-
-    if (!$stmt || !sqlsrv_execute($stmt)) {
-        throw new Exception('Error al buscar usuario');
+    // Llamar al procedimiento almacenado de validación
+    $sql = "{CALL dbo.sp_validar_login(?, ?, ?, ?, ?, ?, ?)}";
+    
+    $resultado = 0;
+    $mensaje = '';
+    $idUsuario = 0;
+    $nombre = '';
+    $rol = '';
+    $passwordHash = '';
+    
+    $params = [
+        $email,
+        array(&$resultado, SQLSRV_PARAM_OUT),
+        array(&$mensaje, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+        array(&$idUsuario, SQLSRV_PARAM_OUT),
+        array(&$nombre, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+        array(&$rol, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+        array(&$passwordHash, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR))
+    ];
+    
+    $stmt = sqlsrv_query($conn, $sql, $params);
+    
+    if (!$stmt) {
+        $errors = sqlsrv_errors();
+        $errorMsg = is_array($errors) && !empty($errors) ? $errors[0]['message'] : 'Error desconocido';
+        throw new Exception('Error ejecutando procedimiento almacenado: ' . $errorMsg);
     }
+    
+    // Procesar todos los result sets para que los OUTPUT params se llenen
+    while (sqlsrv_next_result($stmt) !== null) {
+        // Continuar procesando hasta que no haya más result sets
+    }
+    
+    // Los valores de salida ya están en las variables por referencia
+    // $resultado, $mensaje, $idUsuario, $nombre, $rol, $passwordHash ya tienen los valores
+    
+    sqlsrv_free_stmt($stmt);
 
-    $usuario = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
-
-    if (!$usuario) {
-        sqlsrv_free_stmt($stmt);
+    // Verificar si el usuario fue encontrado
+    if ($resultado !== 0) {
         $database->closeConnection();
         http_response_code(401);
         echo json_encode([
@@ -77,8 +105,7 @@ try {
     }
 
     // Verificar contraseña
-    if (!password_verify($password, $usuario['contrasena'])) {
-        sqlsrv_free_stmt($stmt);
+    if (!password_verify($password, $passwordHash)) {
         $database->closeConnection();
         http_response_code(401);
         echo json_encode([
@@ -89,25 +116,24 @@ try {
     }
 
     // Login exitoso - crear sesión
-    $_SESSION['usuario_id'] = $usuario['id_usuario'];
-    $_SESSION['nombre'] = $usuario['nombre'];
-    $_SESSION['correo'] = $usuario['correo'];
-    $_SESSION['rol'] = $usuario['rol'];
+    $_SESSION['usuario_id'] = $idUsuario;
+    $_SESSION['nombre'] = $nombre;
+    $_SESSION['correo'] = $email;
+    $_SESSION['rol'] = $rol;
     $_SESSION['logged_in'] = true;
 
     // Crear token JWT
     require_once __DIR__ . '/../config/jwt.php';
     $tokenPayload = [
-        'user_id' => $usuario['id_usuario'],
-        'nombre' => $usuario['nombre'],
-        'correo' => $usuario['correo'],
-        'rol' => $usuario['rol'],
+        'user_id' => $idUsuario,
+        'nombre' => $nombre,
+        'correo' => $email,
+        'rol' => $rol,
         'iat' => time(),
         'exp' => time() + 3600 // 1 hora
     ];
     $token = JWTHelper::encode($tokenPayload);
 
-    sqlsrv_free_stmt($stmt);
     $database->closeConnection();
 
     // Respuesta exitosa
@@ -117,10 +143,10 @@ try {
         'message' => 'Login exitoso',
         'token' => $token,
         'data' => [
-            'id_usuario' => $usuario['id_usuario'],
-            'nombre' => $usuario['nombre'],
-            'correo' => $usuario['correo'],
-            'rol' => $usuario['rol']
+            'id_usuario' => $idUsuario,
+            'nombre' => $nombre,
+            'correo' => $email,
+            'rol' => $rol
         ]
     ]);
 } catch (Exception $e) {

@@ -181,21 +181,23 @@ try {
     // Enviar notificación si se creó una cuenta (solo para clientes)
     if (!empty($numeroCuenta) && $rolValido === 'Cliente') {
         try {
-            require_once __DIR__ . '/../../Services/NotificationService.php';
-            $notificationService = new NotificationService();
-            // Buscar el id_cliente para la notificación
-            $sqlCliente = "SELECT id_cliente FROM dbo.Clientes WHERE id_usuario = ?";
-            $stmtCliente = sqlsrv_prepare($conn, $sqlCliente, array(&$idUsuario));
-            if ($stmtCliente && sqlsrv_execute($stmtCliente)) {
-                $rowCliente = sqlsrv_fetch_array($stmtCliente, SQLSRV_FETCH_ASSOC);
-                if ($rowCliente) {
-                    $notificationService->notificarCuentaCreada(
-                        $rowCliente['id_cliente'],
-                        $numeroCuenta,
-                        $tipo_cuenta
-                    );
+            if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
+                require_once __DIR__ . '/../../Services/NotificationService.php';
+                $notificationService = new NotificationService();
+                // Buscar el id_cliente para la notificación
+                $sqlCliente = "SELECT id_cliente FROM dbo.Clientes WHERE id_usuario = ?";
+                $stmtCliente = sqlsrv_prepare($conn, $sqlCliente, array(&$idUsuario));
+                if ($stmtCliente && sqlsrv_execute($stmtCliente)) {
+                    $rowCliente = sqlsrv_fetch_array($stmtCliente, SQLSRV_FETCH_ASSOC);
+                    if ($rowCliente) {
+                        $notificationService->notificarCuentaCreada(
+                            $rowCliente['id_cliente'],
+                            $numeroCuenta,
+                            $tipo_cuenta
+                        );
+                    }
+                    sqlsrv_free_stmt($stmtCliente);
                 }
-                sqlsrv_free_stmt($stmtCliente);
             }
         } catch (Exception $notifError) {
             error_log('Error enviando notificación de cuenta creada: ' . $notifError->getMessage());

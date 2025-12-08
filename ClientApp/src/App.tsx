@@ -23,11 +23,22 @@ export default function App() {
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  // Limpiar sesión al cargar la aplicación para siempre mostrar login
+  // Verificar si hay una sesión activa al cargar la aplicación
   useEffect(() => {
-    clearAuthData();
-    setCurrentView("login");
-    setUserData(null);
+    const storedUser = getStoredUserData();
+    
+    if (storedUser) {
+      setUserData(storedUser);
+      // Determinar la vista según el rol del usuario
+      if (storedUser.rol === 'Administrador') {
+        setCurrentView('admin');
+      } else {
+        setCurrentView('client');
+      }
+    } else {
+      setCurrentView("login");
+    }
+    
     setIsLoading(false);
   }, []);
 

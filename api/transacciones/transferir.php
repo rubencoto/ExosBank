@@ -92,130 +92,100 @@ try {
     $database = new Database();
     $conn = $database->getConnection();
 
-    if (!sqlsrv_begin_transaction($conn)) {
-        $sqlErrors = sqlsrv_errors();
-        $errorMsg = is_array($sqlErrors) && !empty($sqlErrors)
-            ? $sqlErrors[0]['message']
-            : 'Error desconocido';
-        throw new DatabaseException('No se pudo iniciar la transacción: ' . $errorMsg);
+    // Llamar al procedimiento almacenado
+    $sql = "{CALL dbo.sp_realizar_transferencia(?, ?, ?, ?, ?, ?, ?, ?)}";
+    
+    $resultado = 0;
+    $mensaje = '';
+    $resultado = 0;
+    $mensaje = '';
+    $idTransaccion = 0;
+    
+    $params = [
+        $userId,
+        $cuentaOrigen,
+        $cuentaDestino,
+        $monto,
+        $descripcion,
+        array(&$resultado, SQLSRV_PARAM_OUT),
+        array(&$mensaje, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+        array(&$idTransaccion, SQLSRV_PARAM_OUT)
+    ];
+    
+    $stmt = sqlsrv_query($conn, $sql, $params);
+    
+    if (!$stmt) {
+        $errors = sqlsrv_errors();
+        $errorMsg = is_array($errors) && !empty($errors) ? $errors[0]['message'] : 'Error desconocido';
+        throw new DatabaseException('Error ejecutando procedimiento almacenado: ' . $errorMsg);
     }
-
+    
+    // Procesar todos los result sets para que los OUTPUT params se llenen
+    while (sqlsrv_next_result($stmt) !== null) {
+        // Continuar procesando hasta que no haya más result sets
+    }
+    
+    // Los valores de salida ya están en las variables por referencia
+    // $resultado, $mensaje, $idTransaccion ya tienen los valores
+    
+    sqlsrv_free_stmt($stmt);
+    
+    // Verificar resultado
+    if ($resultado !== 0) {
+        $database->closeConnection();
+        
+        // Mapear códigos de error a excepciones apropiadas
+        switch ($resultado) {
+            case -1:
+            case -4:
+                throw new TransactionException($mensaje);
+            case -2:
+                throw ExceptionFactory::createInvalidAmountException();
+            case -3:
+                throw new TransactionLimitExceededException($mensaje);
+            case -5:
+                throw ExceptionFactory::createInsufficientFundsException();
+            case -6:
+                throw new AccountNotFoundException($mensaje);
+            default:
+                throw new DatabaseException($mensaje);
+        }
+    }
+    
     try {
-        // Verificar que la cuenta origen pertenece al usuario autenticado
-        $sqlCuentaOrigen = "SELECT c.id_cuenta, c.numero_cuenta, c.saldo, c.tipo_cuenta
-                             FROM dbo.Cuentas c
-                             INNER JOIN dbo.Clientes cl ON c.id_cliente = cl.id_cliente
-                             WHERE cl.id_usuario = ? AND c.numero_cuenta = ?";
-
-        $stmtOrigen = $database->executeQuery($sqlCuentaOrigen, [$userId, $cuentaOrigen]);
-
-        $origen = sqlsrv_fetch_array($stmtOrigen, SQLSRV_FETCH_ASSOC);
-        sqlsrv_free_stmt($stmtOrigen);
-
-        if (!$origen) {
-            throw new AccountNotFoundException('La cuenta origen no pertenece al usuario actual');
-        }
-
-        // La verificación de estado se omite por ahora ya que no existe la columna 'estado' en la BD
-        // TODO: Agregar columna 'estado' a la tabla Cuentas si se requiere esta funcionalidad
-
-        // Verificar fondos suficientes
-        if (floatval($origen['saldo']) < $monto) {
-            throw ExceptionFactory::createInsufficientFundsException();
-        }
-
-        // Obtener cuenta destino (puede ser de otro usuario)
-        $sqlCuentaDestino = "SELECT c.id_cuenta, c.numero_cuenta, c.saldo, c.tipo_cuenta
-                              FROM dbo.Cuentas c
-                              WHERE c.numero_cuenta = ?";
-
-        $stmtDestino = $database->executeQuery($sqlCuentaDestino, [$cuentaDestino]);
-
-        $destino = sqlsrv_fetch_array($stmtDestino, SQLSRV_FETCH_ASSOC);
-        sqlsrv_free_stmt($stmtDestino);
-
-        if (!$destino) {
-            throw new AccountNotFoundException('La cuenta destino no existe');
-        }
-
-        // La verificación de estado se omite por ahora ya que no existe la columna 'estado' en la BD
-        // TODO: Agregar columna 'estado' a la tabla Cuentas si se requiere esta funcionalidad
-
-        // Actualizar saldo de cuenta origen
-        $updateOrigen = "UPDATE dbo.Cuentas SET saldo = saldo - ? WHERE id_cuenta = ? AND saldo >= ?";
-        $stmtUpdateOrigen = $database->executeQuery($updateOrigen, [$monto, $origen['id_cuenta'], $monto]);
-
-        $rowsAffected = sqlsrv_rows_affected($stmtUpdateOrigen);
-        // Actualizar saldo de cuenta destino
-        $updateDestino = "UPDATE dbo.Cuentas SET saldo = saldo + ? WHERE id_cuenta = ?";
-        $stmtUpdateDestino = $database->executeQuery($updateDestino, [$monto, $destino['id_cuenta']]);
-        sqlsrv_free_stmt($stmtUpdateDestino);
-
-        // Registrar transacción
-        $sqlInsert = "INSERT INTO dbo.Transacciones (id_cuenta_origen, id_cuenta_destino, monto, tipo, fecha)
-                      OUTPUT INSERTED.id_transaccion AS id_transaccion
-                      VALUES (?, ?, ?, ?, SYSDATETIME())";
-
-        $tipoTransaccion = 'transferencia';
-        $stmtInsert = $database->executeQuery($sqlInsert, [
-            $origen['id_cuenta'],
-            $destino['id_cuenta'],
-            $monto,
-            $tipoTransaccion
-        ]);
-
-        $inserted = sqlsrv_fetch_array($stmtInsert, SQLSRV_FETCH_ASSOC);
-        sqlsrv_free_stmt($stmtInsert);
-
-        if (!$inserted || !isset($inserted['id_transaccion'])) {
-            throw new TransactionException('No se pudo obtener el ID de la transacción registrada');
-        }
-
-        sqlsrv_commit($conn);
 
         // Enviar notificaciones de transferencia
-        try {
+        if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
             require_once __DIR__ . '/../../Services/NotificationService.php';
             $notificationService = new NotificationService();
 
-            error_log('Iniciando envío de notificaciones para transacción: ' . $inserted['id_transaccion']);
+            error_log('Iniciando envío de notificaciones para transacción: ' . $idTransaccion);
 
             // Notificar al emisor (débito)
-            $resultEmisor = $notificationService->notificarTransferencia($inserted['id_transaccion'], 'enviada');
+            $resultEmisor = $notificationService->notificarTransferencia($idTransaccion, 'enviada');
             error_log('Notificación de débito enviada: ' . ($resultEmisor ? 'éxito' : 'fallo'));
 
             // Notificar al receptor (crédito)
-            $resultReceptor = $notificationService->notificarTransferencia($inserted['id_transaccion'], 'recibida');
+            $resultReceptor = $notificationService->notificarTransferencia($idTransaccion, 'recibida');
             error_log('Notificación de crédito enviada: ' . ($resultReceptor ? 'éxito' : 'fallo'));
-        } catch (NotificationException $notifError) {
-            error_log('Error enviando notificaciones de transferencia: ' . $notifError->getMessage());
-            // No fallar la transferencia si las notificaciones fallan
-        } catch (Exception $notifError) {
-            error_log('Error inesperado en notificaciones: ' . $notifError->getMessage());
         }
 
         $database->closeConnection();
 
         echo json_encode([
             'status' => 'ok',
-            'message' => 'Transferencia realizada exitosamente',
+            'message' => $mensaje,
             'data' => [
-                'id_transaccion' => $inserted['id_transaccion'],
-                'cuenta_origen' => $origen['numero_cuenta'],
-                'cuenta_destino' => $destino['numero_cuenta'],
-                'monto' => round($monto, 2),
-                'saldo_restante' => round(floatval($origen['saldo']) - $monto, 2)
+                'id_transaccion' => $idTransaccion,
+                'cuenta_origen' => $cuentaOrigen,
+                'cuenta_destino' => $cuentaDestino,
+                'monto' => round($monto, 2)
             ]
         ]);
         exit();
-    } catch (BaseException $txError) {
-        sqlsrv_rollback($conn);
-        $database->closeConnection();
-        throw $txError;
-    } catch (Exception $txError) {
-        sqlsrv_rollback($conn);
-        $database->closeConnection();
-        throw new TransactionException('Error inesperado en transacción: ' . $txError->getMessage());
+    } catch (NotificationException $notifError) {
+        error_log('Error inesperado en notificaciones: ' . $notifError->getMessage());
+        // Continuar ya que la transferencia fue exitosa
     }
 } catch (BaseException $e) {
     // Las excepciones personalizadas manejan su propia respuesta HTTP

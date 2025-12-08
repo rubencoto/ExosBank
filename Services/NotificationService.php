@@ -72,12 +72,12 @@ class NotificationService
             }
 
             // Validar email del cliente
-            if (!filter_var($cliente['email'], FILTER_VALIDATE_EMAIL)) {
-                throw new NotificationException("Email del cliente inválido: " . $cliente['email']);
+            if (!filter_var($cliente['correo'], FILTER_VALIDATE_EMAIL)) {
+                throw new NotificationException("Email del cliente inválido: " . $cliente['correo']);
             }
 
             $this->mailer->clearAddresses();
-            $this->mailer->addAddress($cliente['email'], $cliente['nombre_completo']);
+            $this->mailer->addAddress($cliente['correo'], $cliente['nombre']);
 
             $this->mailer->isHTML(true);
             $this->mailer->Subject = 'Nueva cuenta creada - ExosBank';
@@ -85,7 +85,7 @@ class NotificationService
             $tipoTexto = $tipoCuenta == 1 ? 'Corriente' : 'Ahorro';
 
             $body = $this->getTemplate('cuenta_creada', [
-                'nombre_cliente' => $cliente['nombre_completo'],
+                'nombre_cliente' => $cliente['nombre'],
                 'numero_cuenta' => $numeroCuenta,
                 'tipo_cuenta' => $tipoTexto,
                 'fecha' => date('d/m/Y H:i:s')
@@ -189,19 +189,19 @@ class NotificationService
             error_log("Cliente encontrado: " . json_encode($cliente));
 
             // Validar email del cliente
-            if (!filter_var($cliente['email'], FILTER_VALIDATE_EMAIL)) {
-                error_log("Email inválido para cliente: " . $cliente['email']);
-                throw new NotificationException("Email del cliente inválido: " . $cliente['email']);
+            if (!filter_var($cliente['correo'], FILTER_VALIDATE_EMAIL)) {
+                error_log("Email inválido para cliente: " . $cliente['correo']);
+                throw new NotificationException("Email del cliente inválido: " . $cliente['correo']);
             }
 
             $this->mailer->clearAddresses();
-            $this->mailer->addAddress($cliente['email'], $cliente['nombre_completo']);
+            $this->mailer->addAddress($cliente['correo'], $cliente['nombre']);
 
             $this->mailer->isHTML(true);
             $this->mailer->Subject = "Transferencia {$accion} - ExosBank";
 
             $body = $this->getTemplate('transferencia', [
-                'nombre_cliente' => $cliente['nombre_completo'],
+                'nombre_cliente' => $cliente['nombre'],
                 'accion' => $accion,
                 'preposicion' => $preposicion,
                 'monto' => number_format($transaccion['monto'], 2),
@@ -232,12 +232,7 @@ class NotificationService
     private function obtenerDatosCliente($idCliente)
     {
         try {
-            $query = "SELECT c.id_cliente, u.nombre as nombre_completo, 
-                             u.correo as email
-                      FROM dbo.Clientes c
-                      INNER JOIN dbo.Usuarios u ON c.id_usuario = u.id_usuario
-                      WHERE c.id_cliente = ?";
-
+            $query = "{CALL dbo.sp_obtener_cliente_completo(?)}";
             $stmt = $this->database->executeQuery($query, [$idCliente]);
             $result = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
             sqlsrv_free_stmt($stmt);
@@ -254,13 +249,7 @@ class NotificationService
     private function obtenerClientePorCuenta($idCuenta)
     {
         try {
-            $query = "SELECT c.id_cliente, u.nombre as nombre_completo, 
-                             u.correo as email
-                      FROM dbo.Clientes c
-                      INNER JOIN dbo.Usuarios u ON c.id_usuario = u.id_usuario
-                      INNER JOIN dbo.Cuentas cu ON c.id_cliente = cu.id_cliente
-                      WHERE cu.id_cuenta = ?";
-
+            $query = "{CALL dbo.sp_obtener_cliente_por_cuenta(?)}";
             $stmt = $this->database->executeQuery($query, [$idCuenta]);
             $result = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
             sqlsrv_free_stmt($stmt);
@@ -277,15 +266,7 @@ class NotificationService
     private function obtenerDatosTransaccion($idTransaccion)
     {
         try {
-            $query = "SELECT t.id_transaccion, t.id_cuenta_origen, t.id_cuenta_destino, 
-                             t.monto, t.fecha,
-                             co.numero_cuenta as numero_cuenta_origen,
-                             cd.numero_cuenta as numero_cuenta_destino
-                      FROM dbo.Transacciones t
-                      INNER JOIN dbo.Cuentas co ON t.id_cuenta_origen = co.id_cuenta
-                      INNER JOIN dbo.Cuentas cd ON t.id_cuenta_destino = cd.id_cuenta
-                      WHERE t.id_transaccion = ?";
-
+            $query = "{CALL dbo.sp_obtener_datos_transaccion(?)}";
             $stmt = $this->database->executeQuery($query, [$idTransaccion]);
             $result = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
             sqlsrv_free_stmt($stmt);

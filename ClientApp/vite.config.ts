@@ -60,7 +60,7 @@
       open: true,
       proxy: {
         '/api': {
-          target: 'http://localhost/ExosBank',
+          target: 'http://localhost:8000',
           changeOrigin: true,
           secure: false,
           configure: (proxy, options) => {

@@ -82,80 +82,51 @@ try {
     sqlsrv_begin_transaction($conn);
 
     try {
-        // Obtener el ID del cliente asociado al usuario
-        $queryCliente = "SELECT id_cliente, id_usuario FROM dbo.Clientes WHERE id_usuario = ?";
-        $stmtCliente = $database->executeQuery($queryCliente, [$userId]);
-
-        if (!$stmtCliente) {
-            throw new DatabaseQueryException('Error al buscar información del cliente.');
-        }
-
-        $cliente = sqlsrv_fetch_array($stmtCliente, SQLSRV_FETCH_ASSOC);
-        sqlsrv_free_stmt($stmtCliente);
-
-        if (!$cliente) {
-            throw new NotFoundException('No se encontró información del cliente.');
-        }
-
-        $idCliente = $cliente['id_cliente'];
-
-        // Generar número de cuenta único (11 dígitos)
+        // Llamar al procedimiento almacenado
+        $sql = "{CALL dbo.sp_crear_cuenta_bancaria(?, ?, ?, ?, ?, ?, ?, ?)}";
+        
+        $resultado = 0;
+        $mensaje = '';
+        $resultado = 0;
+        $mensaje = '';
+        $idCuenta = 0;
         $numeroCuenta = '';
-        $intentos = 0;
-        $maxIntentos = 10;
-
-        do {
-            // Generar 10 dígitos aleatorios + 1 dígito del tipo de cuenta
-            $numeroCuenta = str_pad(rand(0, 9999999999), 10, '0', STR_PAD_LEFT) . $tipo_cuenta;
-
-            // Verificar que no exista
-            $queryVerificar = "SELECT COUNT(*) as total FROM dbo.Cuentas WHERE numero_cuenta = ?";
-            $stmtVerificar = $database->executeQuery($queryVerificar, [$numeroCuenta]);
-            $existe = sqlsrv_fetch_array($stmtVerificar, SQLSRV_FETCH_ASSOC);
-            sqlsrv_free_stmt($stmtVerificar);
-
-            $intentos++;
-        } while ($existe['total'] > 0 && $intentos < $maxIntentos);
-
-        if ($intentos >= $maxIntentos) {
-            throw new Exception('No se pudo generar un número de cuenta único. Intenta nuevamente.');
+        $idCliente = 0;
+        
+        $params = [
+            $userId,
+            $tipo_cuenta,
+            0.00, // saldo inicial
+            $clientIP,
+            $userAgent,
+            array(&$resultado, SQLSRV_PARAM_OUT),
+            array(&$mensaje, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+            array(&$idCuenta, SQLSRV_PARAM_OUT),
+            array(&$numeroCuenta, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
+            array(&$idCliente, SQLSRV_PARAM_OUT)
+        ];
+        
+        $stmt = sqlsrv_query($conn, $sql, $params);
+        
+        if (!$stmt) {
+            $errors = sqlsrv_errors();
+            $errorMsg = is_array($errors) && !empty($errors) ? $errors[0]['message'] : 'Error desconocido';
+            throw new DatabaseQueryException('Error ejecutando procedimiento almacenado: ' . $errorMsg);
         }
-
-        // Crear la nueva cuenta con saldo inicial de 0
-        $saldoInicial = 0.00;
-        $queryInsert = "INSERT INTO dbo.Cuentas (id_cliente, numero_cuenta, saldo, tipo_cuenta) 
-                        OUTPUT INSERTED.id_cuenta, INSERTED.numero_cuenta, INSERTED.saldo
-                        VALUES (?, ?, ?, ?)";
-
-        $paramsInsert = [$idCliente, $numeroCuenta, $saldoInicial, $tipo_cuenta];
-        $stmtInsert = $database->executeQuery($queryInsert, $paramsInsert);
-
-        if (!$stmtInsert) {
-            throw new DatabaseQueryException('Error al crear la cuenta.');
+        
+        // Procesar todos los result sets para que los OUTPUT params se llenen
+        while (sqlsrv_next_result($stmt) !== null) {
+            // Continuar procesando hasta que no haya más result sets
         }
-
-        $nuevaCuenta = sqlsrv_fetch_array($stmtInsert, SQLSRV_FETCH_ASSOC);
-        sqlsrv_free_stmt($stmtInsert);
-
-        if (!$nuevaCuenta) {
-            throw new DatabaseQueryException('No se pudo obtener la información de la cuenta creada.');
-        }
-
-        // Registrar en auditoría
-        $clientIP = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
-        $queryAuditoria = "INSERT INTO dbo.Auditoria (id_usuario, accion, tabla_afectada, id_registro_afectado, 
-                           datos_nuevos, ip_usuario, user_agent, fecha_evento)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())";
-        $datosNuevos = json_encode([
-            'numero_cuenta' => $numeroCuenta,
-            'tipo_cuenta' => $tipo_cuenta == 1 ? 'Corriente' : 'Ahorro',
-            'saldo' => $saldoInicial
-        ]);
-        $paramsAuditoria = [$userId, 'INSERT', 'Cuentas', $nuevaCuenta['id_cuenta'], $datosNuevos, $clientIP, $userAgent];
-        $stmtAuditoria = $database->executeQuery($queryAuditoria, $paramsAuditoria);
-        if ($stmtAuditoria) {
-            sqlsrv_free_stmt($stmtAuditoria);
+        
+        // Los valores de salida ya están en las variables por referencia
+        // $resultado, $mensaje, $idCuenta, $numeroCuenta, $idCliente ya tienen los valores
+        
+        sqlsrv_free_stmt($stmt);
+        
+        // Verificar resultado
+        if ($resultado !== 0) {
+            throw new DatabaseQueryException($mensaje);
         }
 
         // Confirmar transacción
@@ -163,9 +134,11 @@ try {
 
         // Enviar notificación por correo
         try {
-            require_once __DIR__ . '/../../Services/NotificationService.php';
-            $notificationService = new NotificationService();
-            $notificationService->notificarCuentaCreada($idCliente, $numeroCuenta, $tipo_cuenta);
+            if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
+                require_once __DIR__ . '/../../Services/NotificationService.php';
+                $notificationService = new NotificationService();
+                $notificationService->notificarCuentaCreada($idCliente, $numeroCuenta, $tipo_cuenta);
+            }
         } catch (Exception $emailError) {
             // Log del error pero no fallar la operación
             error_log("Error al enviar notificación de cuenta: " . $emailError->getMessage());
@@ -174,12 +147,12 @@ try {
         http_response_code(201);
         echo json_encode([
             'success' => true,
-            'message' => 'Cuenta creada exitosamente.',
+            'message' => $mensaje,
             'data' => [
-                'id_cuenta' => $nuevaCuenta['id_cuenta'],
+                'id_cuenta' => $idCuenta,
                 'numero_cuenta' => $numeroCuenta,
                 'tipo_cuenta' => $tipo_cuenta,
-                'saldo' => $saldoInicial
+                'saldo' => 0.00
             ]
         ]);
 
