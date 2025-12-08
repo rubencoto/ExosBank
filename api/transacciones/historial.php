@@ -45,6 +45,14 @@ try {
     
     $userId = $_SESSION['usuario_id'];
     
+    // Obtener parámetros de filtrado y paginación
+    $numeroCuenta = isset($_GET['numero_cuenta']) ? $_GET['numero_cuenta'] : null;
+    $fechaInicio = isset($_GET['fecha_inicio']) ? $_GET['fecha_inicio'] : null;
+    $fechaFin = isset($_GET['fecha_fin']) ? $_GET['fecha_fin'] : null;
+    $tipoTransaccion = isset($_GET['tipo']) ? $_GET['tipo'] : null;
+    $limite = isset($_GET['limite']) ? (int)$_GET['limite'] : 100;
+    $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+    
     // Obtener las cuentas del usuario con su tipo
     $queryCuentas = "SELECT c.id_cuenta, c.numero_cuenta, c.tipo_cuenta
                      FROM dbo.Clientes cl
@@ -57,11 +65,8 @@ try {
         throw new Exception('Error al obtener cuentas del usuario');
     }
     
-    $cuentasUsuario = [];
     $cuentasInfo = [];
     while ($cuenta = sqlsrv_fetch_array($stmtCuentas, SQLSRV_FETCH_ASSOC)) {
-        $cuentasUsuario[] = $cuenta['id_cuenta'];
-        
         $tipoCuentaNombre = '';
         switch ($cuenta['tipo_cuenta']) {
             case 1:
@@ -82,7 +87,7 @@ try {
     }
     sqlsrv_free_stmt($stmtCuentas);
     
-    if (empty($cuentasUsuario)) {
+    if (empty($cuentasInfo)) {
         echo json_encode([
             'status' => 'ok',
             'data' => [
@@ -96,40 +101,31 @@ try {
         exit();
     }
     
-    // Crear placeholders para la consulta IN
-    $placeholders = implode(',', array_fill(0, count($cuentasUsuario), '?'));
+    // Llamar al stored procedure para obtener historial
+    $sql = "{CALL dbo.sp_obtener_historial_transacciones(?, ?, ?, ?, ?, ?, ?)}";
     
-    // Obtener transacciones donde el usuario es origen o destino
-    $queryTransacciones = "SELECT 
-                            t.id_transaccion,
-                            t.id_cuenta_origen,
-                            t.id_cuenta_destino,
-                            t.monto,
-                            t.tipo,
-                            t.fecha,
-                            co.numero_cuenta as cuenta_origen,
-                            cd.numero_cuenta as cuenta_destino
-                          FROM dbo.Transacciones t
-                          LEFT JOIN dbo.Cuentas co ON t.id_cuenta_origen = co.id_cuenta
-                          LEFT JOIN dbo.Cuentas cd ON t.id_cuenta_destino = cd.id_cuenta
-                          WHERE t.id_cuenta_origen IN ($placeholders) 
-                             OR t.id_cuenta_destino IN ($placeholders)
-                          ORDER BY t.fecha DESC";
+    $params = array(
+        array(&$userId, SQLSRV_PARAM_IN),
+        array(&$numeroCuenta, SQLSRV_PARAM_IN),
+        array(&$fechaInicio, SQLSRV_PARAM_IN),
+        array(&$fechaFin, SQLSRV_PARAM_IN),
+        array(&$tipoTransaccion, SQLSRV_PARAM_IN),
+        array(&$limite, SQLSRV_PARAM_IN),
+        array(&$offset, SQLSRV_PARAM_IN)
+    );
     
-    $params = array_merge($cuentasUsuario, $cuentasUsuario);
-    $stmtTransacciones = sqlsrv_prepare($conn, $queryTransacciones, $params);
+    $stmt = sqlsrv_prepare($conn, $sql, $params);
     
-    if (!$stmtTransacciones || !sqlsrv_execute($stmtTransacciones)) {
-        throw new Exception('Error al obtener transacciones');
+    if (!$stmt || !sqlsrv_execute($stmt)) {
+        throw new Exception('Error al obtener historial de transacciones');
     }
     
     $transacciones = [];
     $enviadas = 0;
     $recibidas = 0;
     
-    while ($transaccion = sqlsrv_fetch_array($stmtTransacciones, SQLSRV_FETCH_ASSOC)) {
-        // Determinar si es enviada o recibida
-        $esEnviada = in_array($transaccion['id_cuenta_origen'], $cuentasUsuario);
+    while ($transaccion = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
+        $esEnviada = $transaccion['direccion'] === 'Enviado';
         
         if ($esEnviada) {
             $enviadas++;
@@ -141,17 +137,20 @@ try {
             'id' => $transaccion['id_transaccion'],
             'fecha' => $transaccion['fecha']->format('Y-m-d H:i:s'),
             'tipo' => $transaccion['tipo'],
-            'descripcion' => 'Transferencia', // Campo fijo ya que no existe en la BD
+            'descripcion' => 'Transferencia',
             'origen' => $transaccion['cuenta_origen'] ?? 'Externa',
             'destino' => $transaccion['cuenta_destino'] ?? 'Externa',
             'monto' => floatval($transaccion['monto']),
-            'estado' => 'Completada', // Campo fijo ya que no existe en la BD
+            'monto_neto' => floatval($transaccion['monto_neto']),
+            'estado' => 'Completada',
             'es_enviada' => $esEnviada,
+            'direccion' => $transaccion['direccion'],
+            'cuenta_contraparte' => $transaccion['cuenta_contraparte'],
             'numero_cuenta' => $esEnviada ? $transaccion['cuenta_origen'] : $transaccion['cuenta_destino']
         ];
     }
     
-    sqlsrv_free_stmt($stmtTransacciones);
+    sqlsrv_free_stmt($stmt);
     $database->closeConnection();
     
     echo json_encode([

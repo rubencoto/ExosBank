@@ -414,26 +414,106 @@ GO
 
 
 ------------------------------------------------------------
--- 8) PERMISOS (opcional, si ya tienes RolAdministrador / RolCliente)
+-- 8) SP OBTENER HISTORIAL DE TRANSACCIONES
+------------------------------------------------------------
+IF OBJECT_ID('dbo.sp_obtener_historial_transacciones', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_obtener_historial_transacciones;
+GO
+
+CREATE PROCEDURE dbo.sp_obtener_historial_transacciones
+    @id_usuario INT,
+    @numero_cuenta NVARCHAR(20) = NULL,  -- Si es NULL, trae todas las cuentas del usuario
+    @fecha_inicio DATETIME = NULL,
+    @fecha_fin DATETIME = NULL,
+    @tipo_transaccion NVARCHAR(50) = NULL,
+    @limite INT = 100,
+    @offset INT = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Normalizar parámetros de paginación
+    IF @limite <= 0 SET @limite = 100;
+    IF @offset < 0   SET @offset = 0;
+
+    -- Rango de fechas por defecto
+    IF @fecha_inicio IS NULL
+        SET @fecha_inicio = DATEADD(DAY, -90, GETDATE());
+
+    IF @fecha_fin IS NULL
+        SET @fecha_fin = GETDATE();
+
+    BEGIN TRY
+        SELECT 
+            t.id_transaccion,
+            t.tipo,
+            t.monto,
+            t.fecha,
+            co.numero_cuenta AS cuenta_origen,
+            cd.numero_cuenta AS cuenta_destino,
+            CASE 
+                WHEN co.id_cliente = cl.id_cliente THEN 'Enviado'
+                WHEN cd.id_cliente = cl.id_cliente THEN 'Recibido'
+                ELSE 'Desconocido'
+            END AS direccion,
+            CASE 
+                WHEN co.id_cliente = cl.id_cliente THEN cd.numero_cuenta
+                WHEN cd.id_cliente = cl.id_cliente THEN co.numero_cuenta
+                ELSE NULL
+            END AS cuenta_contraparte,
+            CASE 
+                WHEN co.id_cliente = cl.id_cliente THEN -t.monto
+                WHEN cd.id_cliente = cl.id_cliente THEN  t.monto
+                ELSE 0
+            END AS monto_neto
+        FROM dbo.Transacciones t
+        INNER JOIN dbo.Cuentas  co ON t.id_cuenta_origen = co.id_cuenta
+        LEFT  JOIN dbo.Cuentas  cd ON t.id_cuenta_destino = cd.id_cuenta
+        INNER JOIN dbo.Clientes cl ON (co.id_cliente = cl.id_cliente OR cd.id_cliente = cl.id_cliente)
+        WHERE cl.id_usuario = @id_usuario
+          AND (@numero_cuenta IS NULL 
+               OR co.numero_cuenta = @numero_cuenta 
+               OR cd.numero_cuenta = @numero_cuenta)
+          AND t.fecha >= @fecha_inicio
+          AND t.fecha <= @fecha_fin
+          AND (@tipo_transaccion IS NULL OR t.tipo = @tipo_transaccion)
+        ORDER BY t.fecha DESC, t.id_transaccion DESC
+        OFFSET @offset ROWS
+        FETCH NEXT @limite ROWS ONLY;
+    END TRY
+    BEGIN CATCH
+        RAISERROR(
+            'Error al obtener historial de transacciones: %s',
+            16, 1, ERROR_MESSAGE()
+        );
+    END CATCH
+END;
+GO
+
+
+------------------------------------------------------------
+-- 9) PERMISOS (opcional, si ya tienes RolAdministrador / RolCliente)
 ------------------------------------------------------------
 -- Ajusta o comenta estas líneas según tu modelo de seguridad
 
 IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'RolAdministrador')
 BEGIN
-    GRANT EXECUTE ON dbo.sp_realizar_transferencia      TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_registrar_usuario_cliente   TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_crear_cuenta_bancaria       TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_validar_login               TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_datos_transaccion   TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_cliente_completo    TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_cliente_por_cuenta  TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_realizar_transferencia          TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_registrar_usuario_cliente       TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_crear_cuenta_bancaria           TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_validar_login                   TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_obtener_datos_transaccion       TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_obtener_cliente_completo        TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_obtener_cliente_por_cuenta      TO RolAdministrador;
+    GRANT EXECUTE ON dbo.sp_obtener_historial_transacciones TO RolAdministrador;
 END;
 
 IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'RolCliente')
 BEGIN
-    GRANT EXECUTE ON dbo.sp_realizar_transferencia      TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_crear_cuenta_bancaria       TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_validar_login               TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_obtener_datos_transaccion   TO RolCliente;
+    GRANT EXECUTE ON dbo.sp_realizar_transferencia          TO RolCliente;
+    GRANT EXECUTE ON dbo.sp_crear_cuenta_bancaria           TO RolCliente;
+    GRANT EXECUTE ON dbo.sp_validar_login                   TO RolCliente;
+    GRANT EXECUTE ON dbo.sp_obtener_datos_transaccion       TO RolCliente;
+    GRANT EXECUTE ON dbo.sp_obtener_historial_transacciones TO RolCliente;
 END;
 GO
