@@ -105,7 +105,20 @@ export function ClientTransfer({ clientId }: ClientTransferProps) {
         })
       });
 
-      const data = await response.json();
+      // Verificar si la respuesta tiene contenido antes de parsear JSON
+      const text = await response.text();
+      
+      if (!text) {
+        throw new Error('El servidor no devolvió ninguna respuesta');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (jsonError) {
+        console.error('Respuesta del servidor:', text);
+        throw new Error('El servidor devolvió una respuesta inválida');
+      }
 
       if (!response.ok || data.status !== 'ok') {
         throw new Error(data.message || 'No se pudo completar la transferencia');

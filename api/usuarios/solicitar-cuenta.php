@@ -87,8 +87,6 @@ try {
         
         $resultado = 0;
         $mensaje = '';
-        $resultado = 0;
-        $mensaje = '';
         $idCuenta = 0;
         $numeroCuenta = '';
         $idCliente = 0;
@@ -97,8 +95,6 @@ try {
             $userId,
             $tipo_cuenta,
             0.00, // saldo inicial
-            $clientIP,
-            $userAgent,
             array(&$resultado, SQLSRV_PARAM_OUT),
             array(&$mensaje, SQLSRV_PARAM_OUT, SQLSRV_PHPTYPE_STRING(SQLSRV_ENC_CHAR)),
             array(&$idCuenta, SQLSRV_PARAM_OUT),

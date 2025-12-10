@@ -1,7 +1,16 @@
 <?php
+// Suprimir todos los errores de display para garantizar salida JSON limpia
+error_reporting(0);
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+
 // Configurar sesión
 require_once __DIR__ . '/../../config/session.php';
 session_start();
+
+// Limpiar cualquier salida previa
+if (ob_get_level()) ob_end_clean();
+ob_start();
 
 // Configuración de headers y CORS
 $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
@@ -15,12 +24,14 @@ header('Access-Control-Allow-Credentials: true');
 
 // Manejar preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    if (ob_get_level()) ob_end_clean();
     http_response_code(200);
     exit();
 }
 
 // Validar método PUT
 if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
+    if (ob_get_level()) ob_end_clean();
     http_response_code(405);
     echo json_encode(['status' => 'error', 'message' => 'Método no permitido']);
     exit();
@@ -28,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
 
 // Verificar sesión activa
 if (!isset($_SESSION['usuario_id'])) {
+    if (ob_get_level()) ob_end_clean();
     http_response_code(401);
     echo json_encode([
         'status' => 'error',
@@ -44,6 +56,7 @@ $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
 if (!$data) {
+    if (ob_get_level()) ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
@@ -56,6 +69,7 @@ if (!$data) {
 $camposRequeridos = ['nombre', 'correo', 'cedula', 'direccion', 'telefono'];
 foreach ($camposRequeridos as $campo) {
     if (empty($data[$campo])) {
+        if (ob_get_level()) ob_end_clean();
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
@@ -67,6 +81,7 @@ foreach ($camposRequeridos as $campo) {
 
 // Validar email
 if (!filter_var($data['correo'], FILTER_VALIDATE_EMAIL)) {
+    if (ob_get_level()) ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
@@ -148,6 +163,7 @@ try {
                             break;
                     }
 
+                    if (ob_get_level()) ob_end_clean();
                     http_response_code($httpCode);
                     echo json_encode([
                         'status' => 'error',
@@ -175,6 +191,7 @@ try {
         if ($stmtCheck) {
             if ($database->fetch($stmtCheck)) {
                 $database->freeStatement($stmtCheck);
+                if (ob_get_level()) ob_end_clean();
                 http_response_code(409);
                 echo json_encode([
                     'status' => 'error',
@@ -187,15 +204,12 @@ try {
 
         // Actualizar datos en tabla Usuarios
         $queryUpdate = "UPDATE dbo.Usuarios 
-                        SET nombre = ?, correo = ?, cedula = ?, direccion = ?, telefono = ?, fecha_actualizacion = GETDATE()
+                        SET nombre = ?, correo = ?, fecha_actualizacion = GETDATE()
                         WHERE id_usuario = ?";
 
         $params = array(
             $data['nombre'],
             $data['correo'],
-            $data['cedula'],
-            $data['direccion'],
-            $data['telefono'],
             $userId
         );
 
@@ -248,6 +262,8 @@ try {
 
     $database->closeConnection();
 
+    // Limpiar buffer y enviar respuesta JSON
+    ob_end_clean();
     echo json_encode([
         'status' => 'ok',
         'message' => $resultMessage,
@@ -261,9 +277,13 @@ try {
         'method' => $useStoredProcedure ? 'stored_procedure' : 'traditional'
     ]);
 } catch (Exception $e) {
+    // Limpiar buffer en caso de error
+    if (ob_get_level()) ob_end_clean();
+    
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Error interno del servidor'
+        'message' => 'Error interno del servidor',
+        'debug' => $e->getMessage()
     ]);
 }

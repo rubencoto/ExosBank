@@ -492,28 +492,170 @@ GO
 
 
 ------------------------------------------------------------
--- 9) PERMISOS (opcional, si ya tienes RolAdministrador / RolCliente)
+-- 9) SP ACTUALIZAR PERFIL DE USUARIO
 ------------------------------------------------------------
--- Ajusta o comenta estas líneas según tu modelo de seguridad
+IF OBJECT_ID('dbo.sp_update_user_profile', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_update_user_profile;
+GO
 
-IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'RolAdministrador')
+CREATE PROCEDURE dbo.sp_update_user_profile
+    @p_user_id INT,
+    @p_nombre NVARCHAR(100),
+    @p_correo NVARCHAR(100),
+    @p_cedula NVARCHAR(20),
+    @p_direccion NVARCHAR(100),
+    @p_telefono NVARCHAR(20),
+    @p_result_code INT OUTPUT,
+    @p_result_message NVARCHAR(500) OUTPUT
+AS
 BEGIN
-    GRANT EXECUTE ON dbo.sp_realizar_transferencia          TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_registrar_usuario_cliente       TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_crear_cuenta_bancaria           TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_validar_login                   TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_datos_transaccion       TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_cliente_completo        TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_cliente_por_cuenta      TO RolAdministrador;
-    GRANT EXECUTE ON dbo.sp_obtener_historial_transacciones TO RolAdministrador;
-END;
+    SET NOCOUNT ON;
 
-IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'RolCliente')
-BEGIN
-    GRANT EXECUTE ON dbo.sp_realizar_transferencia          TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_crear_cuenta_bancaria           TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_validar_login                   TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_obtener_datos_transaccion       TO RolCliente;
-    GRANT EXECUTE ON dbo.sp_obtener_historial_transacciones TO RolCliente;
+    DECLARE @id_cliente INT;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Verificar que el usuario existe
+        IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE id_usuario = @p_user_id)
+        BEGIN
+            SET @p_result_code = 1;
+            SET @p_result_message = N'Usuario no encontrado';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Verificar que el correo no esté en uso por otro usuario
+        IF EXISTS (SELECT 1 FROM dbo.Usuarios WHERE correo = @p_correo AND id_usuario != @p_user_id)
+        BEGIN
+            SET @p_result_code = 2;
+            SET @p_result_message = N'El correo ya está registrado';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Verificar que la cédula no esté en uso por otro cliente
+        IF EXISTS (
+            SELECT 1 FROM dbo.Clientes c
+            INNER JOIN dbo.Usuarios u ON c.id_usuario = u.id_usuario
+            WHERE c.cedula = @p_cedula AND u.id_usuario != @p_user_id
+        )
+        BEGIN
+            SET @p_result_code = 3;
+            SET @p_result_message = N'La cédula ya está registrada';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Actualizar tabla Usuarios
+        UPDATE dbo.Usuarios
+        SET nombre = @p_nombre,
+            correo = @p_correo
+        WHERE id_usuario = @p_user_id;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            SET @p_result_code = 4;
+            SET @p_result_message = N'Error al actualizar usuario';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Actualizar tabla Clientes si existe
+        UPDATE dbo.Clientes
+        SET cedula = @p_cedula,
+            direccion = @p_direccion,
+            telefono = @p_telefono
+        WHERE id_usuario = @p_user_id;
+
+        COMMIT TRANSACTION;
+
+        SET @p_result_code = 0;
+        SET @p_result_message = N'Perfil actualizado correctamente';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        SET @p_result_code = 99;
+        SET @p_result_message = ERROR_MESSAGE();
+    END CATCH
 END;
 GO
+
+
+------------------------------------------------------------
+-- 10) SP CAMBIAR CONTRASEÑA DE USUARIO
+------------------------------------------------------------
+IF OBJECT_ID('dbo.sp_update_user_password', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_update_user_password;
+GO
+
+CREATE PROCEDURE dbo.sp_update_user_password
+    @p_user_id INT,
+    @p_current_password_hash NVARCHAR(255),
+    @p_new_password_hash NVARCHAR(255),
+    @p_result_code INT OUTPUT,
+    @p_result_message NVARCHAR(500) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @stored_password_hash NVARCHAR(255);
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Verificar que el usuario existe y obtener su contraseña actual
+        SELECT @stored_password_hash = contrasena
+        FROM dbo.Usuarios
+        WHERE id_usuario = @p_user_id;
+
+        IF @stored_password_hash IS NULL
+        BEGIN
+            SET @p_result_code = 1;
+            SET @p_result_message = N'Usuario no encontrado';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Verificar que la contraseña actual sea correcta
+        -- La verificación real del hash se hace en PHP, aquí solo comparamos
+        IF @stored_password_hash != @p_current_password_hash
+        BEGIN
+            SET @p_result_code = 2;
+            SET @p_result_message = N'La contraseña actual es incorrecta';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Actualizar la contraseña
+        UPDATE dbo.Usuarios
+        SET contrasena = @p_new_password_hash
+        WHERE id_usuario = @p_user_id;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            SET @p_result_code = 3;
+            SET @p_result_message = N'Error al actualizar la contraseña';
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        COMMIT TRANSACTION;
+
+        SET @p_result_code = 0;
+        SET @p_result_message = N'Contraseña actualizada correctamente';
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        SET @p_result_code = 99;
+        SET @p_result_message = ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+
+

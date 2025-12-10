@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { LayoutDashboard, Users, CreditCard, ArrowLeftRight, Shield, Settings, LogOut, FileBarChart, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, Shield, LogOut, FileBarChart, Activity } from 'lucide-react';
 import { AdminOverview } from './admin/AdminOverview';
 import { UsersManagement } from './admin/UsersManagement';
 import { AccountsManagement } from './admin/AccountsManagement';
 import { SecurityRoles } from './admin/SecurityRoles';
-import { SystemSettings } from './admin/SystemSettings';
 import { Reports } from './admin/Reports';
 import { AuditLog } from './admin/AuditLog';
 
@@ -13,7 +12,7 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type AdminView = 'dashboard' | 'users' | 'accounts' | 'security' | 'settings' | 'reports' | 'audit';
+type AdminView = 'dashboard' | 'users' | 'accounts' | 'security' | 'reports' | 'audit';
 
 export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -25,7 +24,6 @@ export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
     { id: 'reports' as AdminView, label: 'Reportes', icon: FileBarChart },
     { id: 'security' as AdminView, label: 'Seguridad', icon: Shield },
     { id: 'audit' as AdminView, label: 'Auditoría', icon: Activity },
-    { id: 'settings' as AdminView, label: 'Configuración', icon: Settings },
   ];
 
   return (
@@ -85,7 +83,6 @@ export function AdminDashboard({ userData, onLogout }: AdminDashboardProps) {
           {currentView === 'reports' && <Reports />}
           {currentView === 'security' && <SecurityRoles />}
           {currentView === 'audit' && <AuditLog />}
-          {currentView === 'settings' && <SystemSettings />}
         </div>
       </div>
     </div>

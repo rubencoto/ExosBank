@@ -64,7 +64,6 @@ export function SecurityRoles() {
       usuarios: { select: false, insert: false, update: false, delete: false },
       cuentas: { select: false, insert: false, update: false, delete: false },
       transacciones: { select: false, insert: false, update: false, delete: false },
-      configuraciones: { select: false, insert: false, update: false, delete: false },
       reportes: { select: false, insert: false, update: false, delete: false },
       auditoria: { select: false, insert: false, update: false, delete: false }
     }
@@ -157,7 +156,6 @@ export function SecurityRoles() {
             usuarios: { select: false, insert: false, update: false, delete: false },
             cuentas: { select: false, insert: false, update: false, delete: false },
             transacciones: { select: false, insert: false, update: false, delete: false },
-            configuraciones: { select: false, insert: false, update: false, delete: false },
             reportes: { select: false, insert: false, update: false, delete: false },
             auditoria: { select: false, insert: false, update: false, delete: false }
           }
@@ -355,23 +353,15 @@ export function SecurityRoles() {
           <p className="text-muted-foreground">Gestión de permisos y roles del sistema</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={isNewRoleOpen} onOpenChange={setIsNewRoleOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo Rol
-              </Button>
-            </DialogTrigger>
-          </Dialog>
+          <Button variant="outline" onClick={() => setIsNewRoleOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Rol
+          </Button>
           
-          <Dialog open={isAssignRoleOpen} onOpenChange={setIsAssignRoleOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-[#0B132B] hover:bg-[#1C2541]">
-                <UserCog className="h-4 w-4 mr-2" />
-                Asignar Rol
-              </Button>
-            </DialogTrigger>
-          </Dialog>
+          <Button className="bg-[#0B132B] hover:bg-[#1C2541]" onClick={() => setIsAssignRoleOpen(true)}>
+            <UserCog className="h-4 w-4 mr-2" />
+            Asignar Rol
+          </Button>
         </div>
       </div>
 
@@ -560,7 +550,8 @@ export function SecurityRoles() {
       </Card>
 
       {/* Diálogo para crear nuevo rol */}
-      <DialogContent className="max-w-4xl">
+      <Dialog open={isNewRoleOpen} onOpenChange={setIsNewRoleOpen}>
+        <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Crear Nuevo Rol</DialogTitle>
           <DialogDescription>
@@ -646,7 +637,8 @@ export function SecurityRoles() {
             </Button>
           </div>
         </form>
-      </DialogContent>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo para editar rol */}
       <Dialog open={isEditRoleOpen} onOpenChange={setIsEditRoleOpen}>
@@ -742,7 +734,8 @@ export function SecurityRoles() {
       </Dialog>
 
       {/* Diálogo para asignar rol */}
-      <DialogContent>
+      <Dialog open={isAssignRoleOpen} onOpenChange={setIsAssignRoleOpen}>
+        <DialogContent>
         <DialogHeader>
           <DialogTitle>Asignar Rol a Usuario</DialogTitle>
           <DialogDescription>
@@ -791,7 +784,8 @@ export function SecurityRoles() {
             </Button>
           </div>
         </form>
-      </DialogContent>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

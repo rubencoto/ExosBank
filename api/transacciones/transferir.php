@@ -1,7 +1,17 @@
 <?php
-// Configurar sesión
+// Prevenir cualquier output no deseado
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // No mostrar errores en output
+ini_set('log_errors', 1); // Loggear errores
+
+// Configurar sesión primero
 require_once __DIR__ . '/../../config/session.php';
 session_start();
+
+// Log de inicio de solicitud
+error_log('=== TRANSFERIR.PHP INICIO ===');
+error_log('Método: ' . $_SERVER['REQUEST_METHOD']);
+error_log('Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? 'no definido'));
 
 // Configuración de headers y CORS
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -28,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // Verificar sesión activa
 if (!isset($_SESSION['usuario_id'])) {
+    error_log('Transferir.php: No hay sesión activa. SESSION: ' . print_r($_SESSION, true));
     http_response_code(401);
     echo json_encode([
         'status' => 'error',
@@ -35,6 +46,8 @@ if (!isset($_SESSION['usuario_id'])) {
     ]);
     exit();
 }
+
+error_log('Transferir.php: Sesión activa para usuario ID: ' . $_SESSION['usuario_id']);
 
 require_once __DIR__ . '/../../config/env.php';
 require_once __DIR__ . '/../../config/database.php';
@@ -97,8 +110,6 @@ try {
     
     $resultado = 0;
     $mensaje = '';
-    $resultado = 0;
-    $mensaje = '';
     $idTransaccion = 0;
     
     $params = [
@@ -153,7 +164,6 @@ try {
     }
     
     try {
-
         // Enviar notificaciones de transferencia
         if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
             require_once __DIR__ . '/../../Services/NotificationService.php';
@@ -169,33 +179,42 @@ try {
             $resultReceptor = $notificationService->notificarTransferencia($idTransaccion, 'recibida');
             error_log('Notificación de crédito enviada: ' . ($resultReceptor ? 'éxito' : 'fallo'));
         }
-
-        $database->closeConnection();
-
-        echo json_encode([
-            'status' => 'ok',
-            'message' => $mensaje,
-            'data' => [
-                'id_transaccion' => $idTransaccion,
-                'cuenta_origen' => $cuentaOrigen,
-                'cuenta_destino' => $cuentaDestino,
-                'monto' => round($monto, 2)
-            ]
-        ]);
-        exit();
     } catch (NotificationException $notifError) {
+        error_log('Error en notificaciones: ' . $notifError->getMessage());
+        // Continuar ya que la transferencia fue exitosa
+    } catch (Exception $notifError) {
         error_log('Error inesperado en notificaciones: ' . $notifError->getMessage());
         // Continuar ya que la transferencia fue exitosa
     }
+
+    $database->closeConnection();
+
+    $responseData = [
+        'status' => 'ok',
+        'message' => $mensaje,
+        'data' => [
+            'id_transaccion' => $idTransaccion,
+            'cuenta_origen' => $cuentaOrigen,
+            'cuenta_destino' => $cuentaDestino,
+            'monto' => round($monto, 2)
+        ]
+    ];
+    
+    error_log('Transferencia exitosa. Enviando respuesta: ' . json_encode($responseData));
+    echo json_encode($responseData);
+    exit();
 } catch (BaseException $e) {
     // Las excepciones personalizadas manejan su propia respuesta HTTP
     $e->sendJsonResponse();
+    exit();
 } catch (Exception $e) {
     error_log('Error crítico en transferir.php: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
         'message' => 'Error interno del servidor',
         'timestamp' => date('Y-m-d H:i:s')
     ]);
+    exit();
 }
